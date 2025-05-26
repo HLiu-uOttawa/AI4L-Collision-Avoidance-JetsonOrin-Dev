@@ -1,0 +1,30 @@
+# File to configuration the video processing
+
+# Configuration for the Yolo Processing
+modelWeights: "./yolov8n.pt" # If a path on disk is specified, it will not be downloaded by Yolo
+saveRawImages: True # Determine if the raw images should be saved
+saveProcessedVideo: True
+outputDirectory: "./output"
+
+# Configration for video source: /dev/video0 is mapped from /dev/video2 on the host
+videoSource: "0"
+#videoSource: "/dev/video0"
+#videoSource: "https://youtu.be/LNwODJXcvt4"
+# videoSource: "/data/video/M0101.mp4"
+
+confidenceThreshold: 0.3
+iouThreshold: 0.5
+videoStream: True
+
+# Configuration for showing the Live Video During Yolo Processing
+showBoxesInVideo: True
+showVideo: False
+printDetectedObjects: False # Print the detected objects in the console as noticed
+
+# Camera Details
+cameraHorizontalFOV: 120
+cameraZoomFactor: 1.0
+imageWidth: 1920
+imageHeight: 1080
+
+videoDelayBetweenProcessingSec: 0.1

@@ -1,0 +1,36 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <OutputType>Exe</OutputType>
+
+        <!-- Set target frameworks to .NET 8.0 only.
+             Change "net8.0" or add to it if a different framework is (also) desired,
+             e.g. to create assemblies for .NET 8.0 and .NET Framework 4.6.2,
+             use "net8.0;net462". -->
+        <TargetFrameworks>net8.0</TargetFrameworks>
+
+        <LangVersion>9.0</LangVersion>
+        <Nullable>enable</Nullable>
+        <Platforms>AnyCPU</Platforms>
+        <NoWarn>MSB3246</NoWarn>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <Compile Include="..\Common\Logging.cs" Link="Logging.cs" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <Content Include="$(OutDir)\VmbC.xml" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Microsoft.Extensions.Logging" Version="8.0.0" />
+        <PackageReference Include="Serilog" Version="3.1.1" />
+        <PackageReference Include="Serilog.Enrichers.WithCaller" Version="1.2.0" />
+        <PackageReference Include="Serilog.Extensions.Logging" Version="8.0.0" />
+        <PackageReference Include="Serilog.Sinks.Console" Version="5.0.1" />
+        <PackageReference Include="Serilog.Sinks.File" Version="5.0.0" />
+        <PackageReference Include="VmbNET" Version="1.*-*" />
+    </ItemGroup>
+
+</Project>

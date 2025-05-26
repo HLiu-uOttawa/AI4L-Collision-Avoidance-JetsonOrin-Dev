@@ -1,0 +1,3 @@
+# Replace with the actual port name, or leave blank for auto-detection
+port: "COM3"
+baud_rate: 115200
