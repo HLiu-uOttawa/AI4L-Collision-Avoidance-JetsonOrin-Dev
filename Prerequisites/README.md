@@ -5,7 +5,12 @@ sudo apt update
 sudo apt install v4l2loopback-dkms
 pip3 install pyfakewebcam
 
+0. Activate .venv
+Enter the folder: nvidia@ubuntu:~/workspace/AI4L-Collision-Avoidance-JetsonOrin-Dev
+$ source .venv/bin/activate
+
 1. VirtualCam
+Enter the folder: nvidia@ubuntu:~/workspace/AI4L-Collision-Avoidance-JetsonOrin-Dev/Prerequisites
 sudo modprobe v4l2loopback devices=1 video_nr=0 card_label="VirtualCam"
 
 #

@@ -14,6 +14,18 @@ from video.VideoConfiguration import VideoConfiguration
 
 import cv2
 
+from pyzbar.pyzbar import decode
+import cv2
+
+def read_qrcode_from_image(np_image):
+    # 确保图像是灰度或彩色都可
+    decoded_objects = decode(np_image)
+    for obj in decoded_objects:
+        data = obj.data.decode("utf-8")
+        return data  # 返回第一个二维码内容
+    return None
+
+
 def setup_output_folders(output_directory: str, save_raw_img: bool = True, start_time: pd.Timestamp = None):
     """
     Create the output folder structure for the run

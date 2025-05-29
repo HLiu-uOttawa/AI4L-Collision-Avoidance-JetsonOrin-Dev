@@ -8,16 +8,40 @@ from vmbpy import *
 # Global variables
 fake_cam = None
 last_time = 0
-frame_interval = 1 / 15  # Limit frame rate to 15 FPS
+frame_interval = 1 / 30  # Limit frame rate to 30 FPS
 
+def add_qrcode_to_image(np_image, text, qr_size=60):
+    import qrcode
+    from PIL import Image
+    import numpy as np
+
+    # 生成 QRCode
+    qr = qrcode.QRCode(
+        version=1,
+        error_correction=qrcode.constants.ERROR_CORRECT_M,
+        box_size=1,
+        border=1,
+    )
+    qr.add_data(text)
+    qr.make(fit=True)
+    img = qr.make_image(fill_color="black", back_color="white").convert("RGB")
+    qr_np = np.array(img.resize((qr_size, qr_size)))
+
+    # paste QR
+    h, w = np_image.shape[:2]
+    x_offset = w - qr_size - 5  # 5px
+    y_offset = h - qr_size - 5  # 5px
+    np_image[y_offset:y_offset+qr_size, x_offset:x_offset+qr_size] = qr_np
+
+    return np_image
 
 def setup_camera(cam: Camera):
     with cam:
         try:
-            cam.BinningHorizontal.set(3)
-            cam.BinningVertical.set(3)
+            cam.BinningHorizontal.set(2)
+            cam.BinningVertical.set(2)
         except:
-            print("Binning to 3x3: failed")
+            print("Binning to 2x2: failed")
 
         try:
             cmos_width = cam.Width.get()
@@ -32,7 +56,7 @@ def setup_camera(cam: Camera):
             print("Warning: failed to set auto exposure.")
 
         try:
-            cam.BalanceWhiteAuto.set('Once')  # Continuous
+            cam.BalanceWhiteAuto.set('Continuous')  # Continuous
         except (AttributeError, VmbFeatureError):
             print("error: cam.BalanceWhiteAuto")
             pass
@@ -58,6 +82,21 @@ def frame_handler(cam: Camera, stream: Stream, frame: Frame):
         # np_image = cv2.cvtColor(np_image, cv2.COLOR_BGR2RGB)
 
     h, w = np_image.shape[:2]
+
+    # === Add high-precision timestamp (ms) header to image ===
+    now = time.time()
+    timestamp = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(now))
+    ms = int((now - int(now)) * 1000)
+    full_timestamp = f"{timestamp}.{ms:03d}"  # e.g., 2025-05-28 15:47:32.123
+
+    cv2.putText(np_image,
+                f"Time: {full_timestamp}",
+                (10, 30),  # position
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.8,               # font scale
+                (255, 0, 0),       # color (RGB)
+                2,                 # thickness
+                cv2.LINE_AA)
 
     # Initialize virtual webcam
     if fake_cam is None:
