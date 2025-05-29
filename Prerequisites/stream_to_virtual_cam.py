@@ -84,19 +84,29 @@ def frame_handler(cam: Camera, stream: Stream, frame: Frame):
     h, w = np_image.shape[:2]
 
     # === Add high-precision timestamp (ms) header to image ===
-    now = time.time()
+    # now = time.time()
+    # timestamp = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(now))
+    # ms = int((now - int(now)) * 1000)
+    # full_timestamp = f"{timestamp}.{ms:03d}"  # e.g., 2025-05-28 15:47:32.123
+    #
+    # cv2.putText(np_image,
+    #             f"Time: {full_timestamp}",
+    #             (10, 30),  # position
+    #             cv2.FONT_HERSHEY_SIMPLEX,
+    #             0.8,               # font scale
+    #             (255, 0, 0),       # color (RGB)
+    #             2,                 # thickness
+    #             cv2.LINE_AA)
+
+    # === Add high-precision timestamp (ms) header to image ===
+    # Timestamp
     timestamp = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(now))
     ms = int((now - int(now)) * 1000)
-    full_timestamp = f"{timestamp}.{ms:03d}"  # e.g., 2025-05-28 15:47:32.123
+    full_timestamp = f"{timestamp}.{ms:03d}"
 
-    cv2.putText(np_image,
-                f"Time: {full_timestamp}",
-                (10, 30),  # position
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.8,               # font scale
-                (255, 0, 0),       # color (RGB)
-                2,                 # thickness
-                cv2.LINE_AA)
+    # Paste QRCode！
+    np_image = add_qrcode_to_image(np_image, full_timestamp, qr_size=60)
+
 
     # Initialize virtual webcam
     if fake_cam is None:

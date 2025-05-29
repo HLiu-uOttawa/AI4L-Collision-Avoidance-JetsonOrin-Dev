@@ -14,4 +14,4 @@ JetPack 6.2 / L4T 36.4.3 / kernel 5.15.148-tegra
    pip3 install ultralytics==8.3.143 plotly==5.22.0 stonesoup==1.2 scikit-learn==1.3.2 pyserial==3.5 pynmea2==1.19.0
    pip3 install qrcode[pil] pyzbar
 
-   python .\tracking.py --skip-radar --skip-video --skip-imu --skip-gps
+   python .\tracking.py --skip-radar --skip-video --skip-imu --skip-gps --skip-tracking
