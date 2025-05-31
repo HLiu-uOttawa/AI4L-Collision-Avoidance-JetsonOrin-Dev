@@ -76,7 +76,7 @@ def get_object_tracking_gm_phd(start_time, tracking_config: TrackingConfiguratio
         show_plot=tracking_config.showTrackingPlot,
         # Saving tracking results
         saveTrackingResults=tracking_config.saveTrackingResults,
-        outputDirectory=tracking_config.outputDirectory
+        outputDirectory= '/output'
     )
 
 

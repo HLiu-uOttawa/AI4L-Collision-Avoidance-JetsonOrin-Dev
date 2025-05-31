@@ -43,10 +43,10 @@ class VideoConfiguration:
             'showBoxesInVideo': True,
             'showVideo': False,
             'printDetectedObjects': False,
-            'cameraHorizontalFOV': 90,
+            'cameraHorizontalFOV': 39,
             'cameraZoomFactor': 1.0,
-            'imageWidth': 1920,
-            'imageHeight': 1080,
+            'imageWidth': 864,
+            'imageHeight': 648,
             'videoDelayBetweenProcessingSec': 0.1
         }
 

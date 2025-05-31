@@ -8,7 +8,7 @@ import multiprocessing as mp
 import math
 from constants import IMAGE_DETECTION_TYPE
 import pandas as pd
-
+import re
 from video.object_location_size import CameraDetails, object_location
 from video.VideoConfiguration import VideoConfiguration
 
@@ -25,7 +25,33 @@ def read_qrcode_from_image(np_image):
         return data  # 返回第一个二维码内容
     return None
 
+def extract_timestamp_from_filename(filename):
+    """
+    Extract the last timestamp from a file or folder path.
+    If multiple timestamps are found, the last one is returned.
+    """
+    # Regex pattern for timestamps with optional milliseconds
+    timestamp_pattern = r'(\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}(?:\.\d{3})?)'
 
+    # Find all matches for the timestamp pattern
+    matches = re.findall(timestamp_pattern, filename)
+    if matches:
+        # Get the last match (or the second one explicitly, if needed)
+        timestamp_str = matches[-1]  # Change to matches[1] if you want the second explicitly
+        
+        # Replace underscores with spaces to match datetime format
+        timestamp_str = timestamp_str.replace('_', ' ')
+        
+        # Parse the timestamp (check if milliseconds are included)
+        if '.' in timestamp_str:
+            dt = datetime.strptime(timestamp_str, '%Y-%m-%d %H-%M-%S.%f')
+        else:
+            dt = datetime.strptime(timestamp_str, '%Y-%m-%d %H-%M-%S')
+        
+        # Convert to Pandas Timestamp
+        return pd.Timestamp(dt)
+    else:
+        raise ValueError(f"No valid timestamp found in path: {filename}") 
 def setup_output_folders(output_directory: str, save_raw_img: bool = True, start_time: pd.Timestamp = None):
     """
     Create the output folder structure for the run
@@ -84,7 +110,7 @@ def detection_from_bbox(yolo_box, detected_object, camera_details: CameraDetails
     x = distance_horizontal * math.sin(az_angle_rad)  # Horizontal distance in the x direction
     y = distance * math.sin(el_angle_rad)  # Vertical distance in the y direction
 
-    return DetectionDetails(detected_object, [x, 0.2, y, 0.2])
+    return  DetectionDetails(detected_object, polar_range_data)                 # DetectionDetails(detected_object, [x, 0.2, y, 0.2]) #TODO Return Detect details on camera
 
 
 def track_objects(stop_event, video_config: VideoConfiguration, start_time: pd.Timestamp, data_queue: mp.Queue = None):

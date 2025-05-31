@@ -19,6 +19,12 @@ class DetectionDetails:
         :return: A string describing the Detection object.
         """
         return f"Detection(object={self.object}, detection={self.data})"
+    def get_data(self):
+        """
+
+        :return: The Detection data.
+        """
+        return self.data
 
 
 class DetectionsAtTime:
@@ -41,7 +47,12 @@ class DetectionsAtTime:
         :return: A string describing the DetectionsAtTime object.
         """
         return f"DetectionsAtTime(timestamp={self.timestamp}, type={self.type}, detections={self.detections})"
+    def get_data(self):
+        """
 
+        :return: The Detection data.
+        """
+        return self.detections
 
 # Example usage:
 # detections_list = [

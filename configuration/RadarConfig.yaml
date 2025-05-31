@@ -26,8 +26,9 @@ cfarParams:
 
 # Run configuration
 run: LIVE # Options are LIVE, RERUN
-sourcePath: "/data/radar/run2-TD/" # Path to the data to be processed for RERUN mode
-
+sourcePath: "data/Experiment_A/radar" #Experiment_A/radar  Case1/2025-05-02_09-30-00/radar
+# Case0/2025-05-02_09-22-44/radar Path to the data to be processed for RERUN mode
+#radar/Apr_20_data
 recordData: True # Record radar data to disk
 recordDataPath: "./output/radar" # Path to the data to be recorded
 
