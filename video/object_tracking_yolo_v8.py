@@ -147,12 +147,17 @@ def track_objects(stop_event, video_config: VideoConfiguration, start_time: pd.T
         print(f"Failed to open video source: {source}")
         return
 
+    is_camera = str(source).isdigit() or str(source).startswith("/dev/video")
     while not stop_event.is_set():
         ret, frame = cap.read()
         if not ret:
-            print("Failed to read frame. Run out of video source? ")
-            time.sleep(0.1)
-            continue
+            if is_camera:
+                print("Camera frame not available, retrying...")
+                time.sleep(0.1)
+                continue
+            else:
+                print("Video playback ended.")
+                break
 
         # print(f"Got frame at {datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]}")
         # time.sleep(0.1)
@@ -167,9 +172,9 @@ def track_objects(stop_event, video_config: VideoConfiguration, start_time: pd.T
                 orig_img_rgb = Image.fromarray(result.orig_img[..., ::-1])  # Convert BGR to RGB
 
                 # Modified by Brian on Mar 20, 2025,
-                # timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S.%f")[:-3]
-                # filename = os.path.join(output_folder, "raw", f"frame_{i:05d}_{timestamp}.jpg")
-                # orig_img_rgb.save(filename)
+                timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S.%f")[:-3]
+                filename = os.path.join(output_folder, "raw", f"frame_{i:05d}_{timestamp}.png")
+                orig_img_rgb.save(filename)
                 # orig_img_rgb.save(os.path.join(output_folder, "raw", f"image_{i}_{orig_img_w}x{orig_img_h}.jpg"))
 
             detectionTimestamp = datetime.now().replace(microsecond=0)

@@ -406,7 +406,7 @@ class ObjectTrackingGmPhd():
                 f.write(f"{formatted_coords_str}\n")
         
         # Print the coordinates to the console for sure
-        print(f"Coordinates of current tracks at {current_time.strftime('%Y-%m-%d_%H-%M-%S')}: {formatted_coords_str}")
+        # print(f"Coordinates of current tracks at {current_time.strftime('%Y-%m-%d_%H-%M-%S')}: {formatted_coords_str}")
         
     
 if __name__ == '__main__':
