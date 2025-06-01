@@ -4,7 +4,7 @@ import time
 import torch
 import pandas as pd
 import os
-#import cv2
+# import cv2
 import csv
 from datetime import datetime, timedelta
 
@@ -29,13 +29,13 @@ import multiprocessing as mp
 import queue
 from datetime import datetime, timedelta
 
+
 def radar_tracking_task(stop_event, config: RadarConfiguration, start_time: pd.Timestamp, radar_data_queue: mp.Queue):
     radar_tracking = RadarTracking(config, start_time, radar_data_queue)
     radar_tracking.object_tracking(stop_event)
 
 
 def process_queues(stop_event, tracker, image_data_queue, radar_data_queue, batching_time=1):
-    
     count = 1
     last_print_time = datetime.now()
     last_remove_tracks_time = datetime.now()
@@ -47,15 +47,15 @@ def process_queues(stop_event, tracker, image_data_queue, radar_data_queue, batc
     # Buffers to store data for the next processing loop
     image_buffer = []
     radar_buffer = []
- 
-    radar_total = [['timestamp','x', 'x_v', 'y', 'y_v']]
+
+    radar_total = [['timestamp', 'x', 'x_v', 'y', 'y_v']]
     img_temp = [['azi', 'ela', 'dist']]
 
-    detect_output = [['timestamp', 'azimuth', 'elavation', 'distance_camera','dist_radar' ]]
+    detect_output = [['timestamp', 'azimuth', 'elavation', 'distance_camera', 'dist_radar']]
     detect_timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")[:-3]
-    detect_output_file_name =  "detect_data_" + detect_timestamp +".csv"
+    detect_output_file_name = "detect_data_" + detect_timestamp + ".csv"
 
-    #Data folder is found in interceptor/data/
+    # Data folder is found in interceptor/data/
     detect_output_file_path = os.path.join("data/", detect_output_file_name)
     radar_timestamps = []
     while not stop_event.is_set():
@@ -86,7 +86,7 @@ def process_queues(stop_event, tracker, image_data_queue, radar_data_queue, batc
             while image_data_queue is not None and not image_data_queue.empty():
                 detectionsAtTime = image_data_queue.get(timeout=max_wait_time)
                 image_timestamp = detectionsAtTime.timestamp
-                
+
                 if image_timestamp <= batch_window_end:
                     image_detections_in_window.append(detectionsAtTime)
                 else:
@@ -114,11 +114,10 @@ def process_queues(stop_event, tracker, image_data_queue, radar_data_queue, batc
             while radar_data_queue is not None and not radar_data_queue.empty():
                 detectionsAtTime = radar_data_queue.get(timeout=max_wait_time)
                 radar_timestamp = detectionsAtTime.timestamp
-                 
 
                 timestamp_str = radar_timestamp.strftime('%Y-%m-%d_%H-%M-%S')[:-3]
-                radar_timestamps.append(timestamp_str) 
-                 
+                radar_timestamps.append(timestamp_str)
+
                 if radar_timestamp <= batch_window_end:
                     radar_detections_in_window.append(detectionsAtTime)
                 else:
@@ -132,109 +131,127 @@ def process_queues(stop_event, tracker, image_data_queue, radar_data_queue, batc
         # Process both image and radar data if available within the time window
         if image_detections_in_window and radar_detections_in_window:
             # print("Data Fusion detected_________________________________________")
-    
-            img_time=image_detections_in_window[-1].timestamp
+
+            img_time = image_detections_in_window[-1].timestamp
             print(image_detections_in_window[-1].timestamp)
-            
+
             i = 0
             timestamps = []
-            while i<len(radar_detections_in_window):
-                timestamps.append(radar_detections_in_window[i].timestamp) 
-                i = i+1
-            
-            #Obtain closest timestamps between radar and camera
-            cloz_dict = { 
-            abs(img_time - date) : date 
-            for date in timestamps}
+            while i < len(radar_detections_in_window):
+                timestamps.append(radar_detections_in_window[i].timestamp)
+                i = i + 1
+
+            # Obtain closest timestamps between radar and camera
+            cloz_dict = {
+                abs(img_time - date): date
+                for date in timestamps}
             res = cloz_dict[min(cloz_dict.keys())]
             print("Nearest date from radar list : " + str(res))
-            combination_index = timestamps.index(res) 
+            combination_index = timestamps.index(res)
 
             combined_timestamp = max(
                 image_detections_in_window[-1].timestamp, radar_detections_in_window[-1].timestamp
             )
             combined_detections = (
-                [img_time] + image_detections_in_window[-1].detections[0].get_data()  + radar_detections_in_window[combination_index].detections  
+                    [img_time] + image_detections_in_window[-1].detections[0].get_data() + radar_detections_in_window[
+                combination_index].detections
             )
             print("data fusion value___________________________________________________________")
-            #print(combined_detections)
+            # print(combined_detections)
             detect_output.append(combined_detections)
-            
 
-            np.savetxt(detect_output_file_path, detect_output, delimiter =", ", fmt ='% s')
- 
-           # vb = np.array([r*np.cos(visEl[k])*np.cos(visAz[k]),
-          #         r*np.cos(visEl[k])*np.sin(visAz[k]),
-           #        r*np.sin(visEl[k])])
-           
-            #print(radar_detections_in_window[-1] )
-            #print(image_detections_in_window[-1] )
-            #tracker.update_tracks(combined_detections, combined_timestamp, type="combined") #TODO Implement update tracks
-            
+            np.savetxt(detect_output_file_path, detect_output, delimiter=", ", fmt='% s')
+
+            # Add the code from Sina to communicate with server
+            import socket
+            import json
+
+            HOST = 'localhost'
+            PORT = 65432
+
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                s.connect((HOST, PORT))
+                message = {"collision": 1}
+                s.sendall(json.dumps(message).encode())
+
+                data = s.recv(1024)
+                response = json.loads(data.decode())
+                print("Server Response:", response)
+            #
+
+            # vb = np.array([r*np.cos(visEl[k])*np.cos(visAz[k]),
+            #         r*np.cos(visEl[k])*np.sin(visAz[k]),
+            #        r*np.sin(visEl[k])])
+
+            # print(radar_detections_in_window[-1] )
+            # print(image_detections_in_window[-1] )
+            # tracker.update_tracks(combined_detections, combined_timestamp, type="combined") #TODO Implement update tracks
+
         elif image_detections_in_window:
             image_timestamp = image_detections_in_window[-1].timestamp
             image_detections = image_detections_in_window[-1].detections
 
             # print("Timestamps img,rad==========================")
             # print(image_detections_in_window)
-            
-            #tracker.update_tracks(image_detections, image_timestamp, type="image_only")
+
+            # tracker.update_tracks(image_detections, image_timestamp, type="image_only")
 
         elif radar_detections_in_window:
-            #print("Timestamps ,rad only____________________________")
-  
-            #print(len(radar_detections_in_window))
-            #print(radar_detections_in_window)
-      
+            # print("Timestamps ,rad only____________________________")
+
+            # print(len(radar_detections_in_window))
+            # print(radar_detections_in_window)
+
             radar_timestamp = radar_detections_in_window[-1].timestamp
             radar_detections = radar_detections_in_window[-1].detections
 
-             
-            #tracker.update_tracks([radar_detections], radar_timestamp, type="radar_only")
-             
+            # tracker.update_tracks([radar_detections], radar_timestamp, type="radar_only")
+
         else:
             last_batch_time = datetime.now()  # Set the start of the next batch window
-            
-            time.sleep(0.01) # Small sleep to avoid busy waiting
+
+            time.sleep(0.01)  # Small sleep to avoid busy waiting
             continue
-        
+
         count += 1
         current_time = datetime.now()
         last_batch_time = current_time  # Set the start of the next batch window
         # Print current tracks approx every 5 seconds
         if (current_time - last_print_time).total_seconds() >= 5:
-            
+
             remove = False
-            interval = batching_time*2
+            interval = batching_time * 2
             # Print current tracks with remove_tracks=True every 30 seconds, this will remove tracks that are not being updated
             if (current_time - last_remove_tracks_time).total_seconds() >= 30:
                 remove = True
-                interval = batching_time*10
+                interval = batching_time * 10
                 last_remove_tracks_time = current_time
 
             tracker.print_current_tracks(remove_tracks=remove, interval=interval)
             last_print_time = current_time
 
     tracker.show_tracks_plot()
-    tracker.print_current_tracks(remove_tracks=True, interval=batching_time*2)
-            
+    tracker.print_current_tracks(remove_tracks=True, interval=batching_time * 2)
+
+
 def plot_data(plot_queue: mp.Queue, stop_event):
     while not stop_event.is_set():
         while plot_queue is not None and not plot_queue.empty():
-            try:                
+            try:
                 plot_data = plot_queue.get(timeout=1)
                 # For now, do nothing. 
             except mp.queues.Empty:
                 pass
+
 
 if __name__ == '__main__':
     start_time = pd.Timestamp.now()
     parser = define_argument_parser()
     parser.set_defaults(download=True)
     args = parser.parse_args()
-    
+
     print("Starting the tracking processes.")
-    
+
     # Create a stop event and a queue for data to be passed between processes
     stop_event = mp.Event()
     radar_data_queue = None
@@ -259,35 +276,41 @@ if __name__ == '__main__':
     # Create the video tracking configuration, process, queue to move data
     if not args.skip_video:
         video_config = VideoConfiguration(config_path=args.video_config)
-        video_config = update_video_config(video_config, args) # Update the video configuration with the command line arguments
-        
+        video_config = update_video_config(video_config,
+                                           args)  # Update the video configuration with the command line arguments
+
         image_data_queue = mp.Queue()
         with torch.no_grad():
-            video_proc = mp.Process(name="Video Data Coll.", target=track_objects, args=(stop_event, video_config, start_time, image_data_queue))
-            video_proc.start()  
-    
-    # Create the radar tracking configuration, process, queue to move data if not disabled
+            video_proc = mp.Process(name="Video Data Coll.", target=track_objects,
+                                    args=(stop_event, video_config, start_time, image_data_queue))
+            video_proc.start()
+
+            # Create the radar tracking configuration, process, queue to move data if not disabled
     if not args.skip_radar:
-        if not args.skip_video: # Add a delay to allow the video process to start before the radar process
+        if not args.skip_video:  # Add a delay to allow the video process to start before the radar process
             time.sleep(args.radar_start_delay)
         radar_config = RadarConfiguration(config_path=args.radar_config)
-        radar_config = update_radar_config(radar_config, args) # Update the radar configuration with the command line arguments
-        
+        radar_config = update_radar_config(radar_config,
+                                           args)  # Update the radar configuration with the command line arguments
+
         radar_data_queue = mp.Queue()
-        radar_proc = mp.Process(name="Radar Data Coll.", target=radar_tracking_task, args=(stop_event, radar_config, start_time, radar_data_queue))
+        radar_proc = mp.Process(name="Radar Data Coll.", target=radar_tracking_task,
+                                args=(stop_event, radar_config, start_time, radar_data_queue))
         radar_proc.start()
-      
+
     # Create the object tracking configuration, process, queue to move data
     if not args.skip_tracking:
         tracking_config = TrackingConfiguration()
-        tracking_config = update_tracking_config(tracking_config, args) # Update the video configuration with the command line arguments
-        tracking_config.max_track_distance = radar_config.bin_size_meters * 512 # Override the max distance based on radar range
+        tracking_config = update_tracking_config(tracking_config,
+                                                 args)  # Update the video configuration with the command line arguments
+        tracking_config.max_track_distance = radar_config.bin_size_meters * 512  # Override the max distance based on radar range
         tracker = get_object_tracking_gm_phd(start_time, tracking_config)
-        
+
         # Queue process to handle incoming data
-        tracking_proc = mp.Process(name="Tracking", target=process_queues, args=(stop_event, tracker, image_data_queue, radar_data_queue, args.batching_time))
+        tracking_proc = mp.Process(name="Tracking", target=process_queues,
+                                   args=(stop_event, tracker, image_data_queue, radar_data_queue, args.batching_time))
         tracking_proc.start()
-        
+
     try:
         while True:
             user_input = input("Type 'q' and hit ENTER to quit:\n")
