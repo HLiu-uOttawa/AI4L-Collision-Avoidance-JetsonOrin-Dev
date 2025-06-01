@@ -139,7 +139,9 @@ def track_objects(stop_event, video_config: VideoConfiguration, start_time: pd.T
 
     model = YOLO(model_weights).to('cuda')
 
-    source = '/dev/video0'
+    # source = '/dev/video0'
+    print(f"Opening video Source: {source}")
+
     cap = cv2.VideoCapture(source)
     if not cap.isOpened():
         print(f"Failed to open video source: {source}")
@@ -148,7 +150,7 @@ def track_objects(stop_event, video_config: VideoConfiguration, start_time: pd.T
     while not stop_event.is_set():
         ret, frame = cap.read()
         if not ret:
-            print("Failed to read frame.")
+            print("Failed to read frame. Run out of video source? ")
             time.sleep(0.1)
             continue
 
@@ -156,7 +158,7 @@ def track_objects(stop_event, video_config: VideoConfiguration, start_time: pd.T
         # time.sleep(0.1)
 
         height, width, channels = frame.shape
-        print(f"Got frame at {datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]}, size: {width}x{height}, channels: {channels}")
+        # print(f"Got frame at {datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]}, size: {width}x{height}, channels: {channels}")
 
         results = model.track(frame, persist=True, conf=confidence_threshold, iou=iou_threshold, verbose=False)
         for i, result in enumerate(results):

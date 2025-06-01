@@ -131,7 +131,7 @@ def process_queues(stop_event, tracker, image_data_queue, radar_data_queue, batc
 
         # Process both image and radar data if available within the time window
         if image_detections_in_window and radar_detections_in_window:
-            print("Data Fusion detected_________________________________________")
+            # print("Data Fusion detected_________________________________________")
     
             img_time=image_detections_in_window[-1].timestamp
             print(image_detections_in_window[-1].timestamp)
@@ -174,8 +174,9 @@ def process_queues(stop_event, tracker, image_data_queue, radar_data_queue, batc
         elif image_detections_in_window:
             image_timestamp = image_detections_in_window[-1].timestamp
             image_detections = image_detections_in_window[-1].detections
-            print("Timestamps img,rad==========================")
-            print(image_detections_in_window)
+
+            # print("Timestamps img,rad==========================")
+            # print(image_detections_in_window)
             
             #tracker.update_tracks(image_detections, image_timestamp, type="image_only")
 

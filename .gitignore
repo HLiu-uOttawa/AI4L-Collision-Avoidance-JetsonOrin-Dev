@@ -1,6 +1,7 @@
 .venv
 .idea
 data
+output
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -179,5 +180,5 @@ video/*.jpg
 video/*.yaml
 
 # Ignore all data samples used for testing, and output folder from that testing
-#data/
-#output/
+data/
+output/

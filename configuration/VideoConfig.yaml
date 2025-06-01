@@ -9,10 +9,10 @@ saveProcessedVideo: True
 outputDirectory: "./output"
 
 # Configration for video source: /dev/video0 is mapped from /dev/video2 on the host
-videoSource: "0"
+#videoSource: "0"
 #videoSource: "/dev/video0"
 #videoSource: "https://youtu.be/LNwODJXcvt4"
-#videoSource: "data/Experiment_A/2025_05_05_ExpA_Video_short.mp4"  #data/Experiment_A/2025_05_05_ExpA_Video.mp4
+videoSource: "data/Experiment_A/2025_05_05_ExpA_Video_short.mp4"  #data/Experiment_A/2025_05_05_ExpA_Video.mp4
 
 confidenceThreshold: 0.3
 iouThreshold: 0.5
