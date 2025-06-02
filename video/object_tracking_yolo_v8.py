@@ -17,13 +17,15 @@ import cv2
 from pyzbar.pyzbar import decode
 import cv2
 
+
 def read_qrcode_from_image(np_image):
-    # 确保图像是灰度或彩色都可
+    # Ensure the image is either grayscale or color.
     decoded_objects = decode(np_image)
     for obj in decoded_objects:
         data = obj.data.decode("utf-8")
-        return data  # 返回第一个二维码内容
+        return data  # Return the content of the first QR code.
     return None
+
 
 def extract_timestamp_from_filename(filename):
     """
@@ -38,20 +40,22 @@ def extract_timestamp_from_filename(filename):
     if matches:
         # Get the last match (or the second one explicitly, if needed)
         timestamp_str = matches[-1]  # Change to matches[1] if you want the second explicitly
-        
+
         # Replace underscores with spaces to match datetime format
         timestamp_str = timestamp_str.replace('_', ' ')
-        
+
         # Parse the timestamp (check if milliseconds are included)
         if '.' in timestamp_str:
             dt = datetime.strptime(timestamp_str, '%Y-%m-%d %H-%M-%S.%f')
         else:
             dt = datetime.strptime(timestamp_str, '%Y-%m-%d %H-%M-%S')
-        
+
         # Convert to Pandas Timestamp
         return pd.Timestamp(dt)
     else:
-        raise ValueError(f"No valid timestamp found in path: {filename}") 
+        raise ValueError(f"No valid timestamp found in path: {filename}")
+
+
 def setup_output_folders(output_directory: str, save_raw_img: bool = True, start_time: pd.Timestamp = None):
     """
     Create the output folder structure for the run
@@ -110,7 +114,8 @@ def detection_from_bbox(yolo_box, detected_object, camera_details: CameraDetails
     x = distance_horizontal * math.sin(az_angle_rad)  # Horizontal distance in the x direction
     y = distance * math.sin(el_angle_rad)  # Vertical distance in the y direction
 
-    return  DetectionDetails(detected_object, polar_range_data)                 # DetectionDetails(detected_object, [x, 0.2, y, 0.2]) #TODO Return Detect details on camera
+    return DetectionDetails(detected_object,
+                            polar_range_data)  # DetectionDetails(detected_object, [x, 0.2, y, 0.2]) #TODO Return Detect details on camera
 
 
 def track_objects(stop_event, video_config: VideoConfiguration, start_time: pd.Timestamp, data_queue: mp.Queue = None):
@@ -138,8 +143,6 @@ def track_objects(stop_event, video_config: VideoConfiguration, start_time: pd.T
     output_folder = setup_output_folders(output_directory, save_raw_img, start_time)
 
     model = YOLO(model_weights).to('cuda')
-
-    # source = '/dev/video0'
     print(f"Opening video Source: {source}")
 
     cap = cv2.VideoCapture(source)
