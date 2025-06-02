@@ -17,7 +17,6 @@ import cv2
 from pyzbar.pyzbar import decode
 import cv2
 
-
 def read_qrcode_from_image(np_image):
     # Ensure the image is either grayscale or color.
     decoded_objects = decode(np_image)
@@ -25,7 +24,6 @@ def read_qrcode_from_image(np_image):
         data = obj.data.decode("utf-8")
         return data  # Return the content of the first QR code.
     return None
-
 
 def extract_timestamp_from_filename(filename):
     """

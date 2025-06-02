@@ -3,6 +3,10 @@
 data
 output
 
+imu/imu_data/imu_data.tmp
+gps/gps_data/gps_data.tmp
+
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

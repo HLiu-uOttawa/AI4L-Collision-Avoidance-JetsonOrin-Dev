@@ -35,7 +35,7 @@ def radar_tracking_task(stop_event, config: RadarConfiguration, start_time: pd.T
     radar_tracking.object_tracking(stop_event)
 
 
-def process_queues(stop_event, tracker, image_data_queue, radar_data_queue, batching_time=1):
+def process_queues(stop_event, tracker, image_data_queue, radar_data_queue, imu_status, batching_time=1):
     count = 1
     last_print_time = datetime.now()
     last_remove_tracks_time = datetime.now()
@@ -58,7 +58,12 @@ def process_queues(stop_event, tracker, image_data_queue, radar_data_queue, batc
     # Data folder is found in interceptor/data/
     detect_output_file_path = os.path.join("data/", detect_output_file_name)
     radar_timestamps = []
+
+
     while not stop_event.is_set():
+        
+        print(f"In process_queue: {imu_status}")
+        
         processed_anything = False
         image_detections_in_window = []
         radar_detections_in_window = []
@@ -261,12 +266,22 @@ if __name__ == '__main__':
     imu_data_queue = None
     gps_data_queue = None
 
+
+    imu_status = None
+
+    # Generate a IMU Processing
     if not args.skip_imu:
         print("Process imu and save data...")
         imu_data_queue = mp.Queue()
-        imu_proc = mp.Process(name="imu_processing", target=imu.imu_process, args=(stop_event, imu_data_queue,))
+        imu_status = mp.Manager().Namespace()
+
+        imu_proc = mp.Process(
+        	name="imu_processing",
+        	target=imu.imu_process,
+        	args=(stop_event, imu_data_queue, imu_status))
         imu_proc.start()
 
+    # Generate a GPS Processing
     if not args.skip_gps:
         print("Process gps and save data...")
         gps_data_queue = mp.Queue()
@@ -307,8 +322,15 @@ if __name__ == '__main__':
         tracker = get_object_tracking_gm_phd(start_time, tracking_config)
 
         # Queue process to handle incoming data
-        tracking_proc = mp.Process(name="Tracking", target=process_queues,
-                                   args=(stop_event, tracker, image_data_queue, radar_data_queue, args.batching_time))
+        tracking_proc = mp.Process(
+        	name="Tracking",
+        	target=process_queues,
+            args=(stop_event,
+            	tracker,
+            	image_data_queue,
+            	radar_data_queue, 
+            	imu_status,
+            	args.batching_time))
         tracking_proc.start()
 
     try:

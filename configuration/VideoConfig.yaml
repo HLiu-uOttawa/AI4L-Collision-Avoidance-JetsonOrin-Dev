@@ -14,7 +14,7 @@ outputDirectory: "./output"
 videoSource: 0
 
 # use /dev/video0 for "Jetson Orin" or Linux-like system 
-#videoSource: "/dev/video0"
+videoSource: "/dev/video0"
 
 #videoSource: "https://youtu.be/LNwODJXcvt4"
 #videoSource: "data/Experiment_A/2025_05_05_ExpA_Video_short.mp4"  #data/Experiment_A/2025_05_05_ExpA_Video.mp4

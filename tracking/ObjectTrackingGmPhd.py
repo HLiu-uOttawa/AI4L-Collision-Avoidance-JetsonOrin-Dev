@@ -375,7 +375,7 @@ class ObjectTrackingGmPhd():
             current_time = datetime.now()
         
         current_tracks = self.find_tracks_remove_older_tracks(current_time, remove_tracks=remove_tracks, interval=interval)
-        print(f"There are currently {len(current_tracks)} tracks identified in the last {interval} seconds.")
+        # print(f"There are currently {len(current_tracks)} tracks identified in the last {interval} seconds.")
         
         coordinates = []
         # Iterate through each tracks, find the x, y coordinates to print the current tracks

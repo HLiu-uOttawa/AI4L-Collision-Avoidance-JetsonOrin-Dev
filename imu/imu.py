@@ -2,7 +2,6 @@ import time, datetime, platform, os
 import serial
 import serial.tools.list_ports
 import psutil
-import time, datetime
 
 # import lib.device_model as deviceModel
 from imu.lib.device_model import DeviceModel
@@ -46,10 +45,10 @@ def AccelerationCalibration(device):
     :return:
     """
     device.AccelerationCalibration()  # Acceleration calibration
-    print("加计校准结束")
+    print("Acceleration calibration completed")
 
 
-def onUpdate(dev):
+def onUpdate(dev, imu_status):
     """
     Data update event
     :param dev: Device model
@@ -85,6 +84,10 @@ def onUpdate(dev):
     file_path = os.path.join(script_dir, file_path)
 
 
+
+    imu_status.state = "Here is test for imu status string!"
+    imu_status.state = imu_data_line
+
     if not os.path.exists(file_path):
         imu_data_head = "Time, Temperature, Acceleration, Angular_Velocity, Angle"
         with open(file_path, 'w') as file:
@@ -96,8 +99,10 @@ def onUpdate(dev):
             file.write(imu_data_line + '\n')
             # print(imu_data_line)
 
+import time
+from functools import partial
 
-def main():
+def main(imu_status):
     # ports = serial.tools.list_ports.comports()
     # for port in ports:
     #     print("List COM ports: ", port.device)
@@ -121,23 +126,25 @@ def main():
     # device.AccelerationCalibration()  # Acceleration calibration
     # print("Calibration end")
     # device.writeReg(0x52)  # set z-axis degree to be zone
-    # device.writeReg(0x65)  # 设置安装方向:水平
-    # device.writeReg(0x66)  # 设置安装方向:垂直
-    # device.writeReg(0x63)  # 设置波特率:115200
-    # device.writeReg(0x64)  # 设置波特率:9600
-    device.dataProcessor.onVarChanged.append(onUpdate)  # 数据更新事件 Data update event
+    # device.writeReg(0x65)  # Set installation orientation: horizontal
+    # device.writeReg(0x66)  # Set installation orientation: vertical
+    # device.writeReg(0x63)  # Set baud rate: 115200
+    # device.writeReg(0x64)  # Set baud rate: 9600
+    device.dataProcessor.onVarChanged.append(
+            partial(onUpdate, imu_status=imu_status)
+            )  # Data update event
 
     # wait for stop signal
     # device.closeDevice()
 
 
 '''
-    startRecord()                                       # 开始记录数据    Start recording data
+    startRecord()                                       # Start recording data
     input()
     device.closeDevice()
-    endRecord()                                         # 结束记录数据 End record data
+    endRecord()                                         # End record data
 '''
-def imu_process(stop_event, imu_data_queue):
+def imu_process(stop_event, imu_data_queue, imu_status):
     print("Starting imu process...")
 
     file_path = "./imu_data/imu_data.tmp"
@@ -147,10 +154,10 @@ def imu_process(stop_event, imu_data_queue):
         formatted_time = time.strftime('%Y-%m-%d-%H-%M-%S', time.localtime(creation_time))
         os.rename(file_path, "./imu_data/" + "imu_" + formatted_time + ".log")
 
-    # # Provide the path to the configuration file
+    # Provide the path to the configuration file
     config_file_path = "imu_config.yml"
 
-    main()
+    main(imu_status)
 
 
 if __name__ == '__main__':

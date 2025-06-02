@@ -125,8 +125,8 @@ class DeviceModel:
 
     def closeDevice(self):
         """
-        关闭设备
-        :return: 无返回
+        Close device
+        :return: no return
         """
         if self.serialPort is not None:
             self.serialPort.close()

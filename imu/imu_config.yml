@@ -1,3 +1,6 @@
+# On windows: USB-SERIAL CH340 (COM3)
+# Not suggest to run on windown directly
+
 # Replace with the actual port name, or leave blank for auto-detection
 port: "COM3"
 baud_rate: 115200

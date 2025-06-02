@@ -190,7 +190,6 @@ class RadarTracking():
 
                         if peakVal > np.mean( avg_rangeFFT_db[:,k] ) + Threshold_dB:
                             range_est= range_axis_reversed[peakBin]
-                            print(range_est)
                             self.radar_data_queue.put(DetectionsAtTime(timestamps[k+start_index],RADAR_DETECTION_TYPE, [range_est] )  )
                         else:
                             range_est= 0
@@ -260,8 +259,6 @@ class RadarTracking():
             window_start = pd.Timestamp.now()
             #Gather multiple frames for window
             if(window_start> window_end): #or i == len(txt_files)-1 
-                print("Time passed")
-                print(i)
                 window_end = window_start + time_window
                 if avglinear.size > numSamples:
                     
