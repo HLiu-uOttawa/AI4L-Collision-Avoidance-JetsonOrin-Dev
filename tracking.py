@@ -61,8 +61,8 @@ def process_queues(stop_event,
     detect_timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")[:-3]
     detect_output_file_name = "detect_data_" + detect_timestamp + ".csv"
 
-    # Data folder is found in interceptor/data/
-    detect_output_file_path = os.path.join("data/", detect_output_file_name)
+    # Upload data fusion to output folder
+    detect_output_file_path = os.path.join("output/", detect_output_file_name)
     radar_timestamps = []
 
     while not stop_event.is_set():
@@ -168,7 +168,7 @@ def process_queues(stop_event,
                     [img_time] + image_detections_in_window[-1].detections[0].get_data() + radar_detections_in_window[
                 combination_index].detections
             )
-            print("data fusion value___________________________________________________________")
+            print("data fusion___________________________________________________________")
             # print(combined_detections)
             detect_output.append(combined_detections)
 
