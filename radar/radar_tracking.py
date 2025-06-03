@@ -58,7 +58,7 @@ class RadarTracking():
         elif self.config.run_type == RunType.LIVE:
             self.process_live_data(stop_event)
 
-    def process_radar_data(self, td_data):
+    def process_radar_data(self, td_data, max_rangefft1, max_rangefft2):
         """
         Obtain range estimate from radar data
         """
@@ -76,7 +76,7 @@ class RadarTracking():
         
         range_bin = c/(2*delta_f)
         range_axis   = np.linspace(0 ,range_bin*(numSamples/2-1) , int(numSamples/2))
-        range_axis_reversed      = range_axis[::-1]
+        range_axis_reversed  = range_axis[::-1]
         x = pd.DataFrame(td_data.td_data, columns=["I1", "Q1", "I2", "Q2"])
         
         # Simulate the timestamp as the current time to we can use the real-time windowing.
@@ -97,8 +97,16 @@ class RadarTracking():
         rangefft1 = fft1[int(numSamples/2):  ]
         rangefft2 = fft2[int(numSamples/2):  ]
 
-        rangefft1 = rangefft1/ 0.098981192708  #
-        rangefft2 = rangefft2/ 0.10022076792586  #
+        cell_max_rangefft1 = max(abs(rangefft1)) 
+        cell_max_rangefft2 = max(abs(rangefft2))
+
+        if cell_max_rangefft1 > max_rangefft1:
+            max_rangefft1 = cell_max_rangefft1
+        if cell_max_rangefft2 > max_rangefft2:
+            max_rangefft2 = cell_max_rangefft2
+        
+        rangefft1 = rangefft1/ max_rangefft1  #max(abs(rangefft1)) 
+        rangefft2 = rangefft2/  max_rangefft2  #max(abs(rangefft2)) 
         
         rangefft1 = compensatePathloss_dB(rangefft1, range_axis_reversed, 1.15)
         rangefft2 = compensatePathloss_dB(rangefft2, range_axis_reversed, 1.15)
@@ -107,7 +115,7 @@ class RadarTracking():
         rangefft2, a, time2 = Clutter_rejection(rangefft2, range_axis, 1, 2, MBW)
 
         avg_fft_linear =abs((abs(rangefft1) - abs(rangefft2)))
-        return avg_fft_linear, timestamp
+        return avg_fft_linear, timestamp, max_rangefft1, max_rangefft2
 
 
 
@@ -138,6 +146,9 @@ class RadarTracking():
         avglinear = np.array([])
         #range_bin = c/(2*delta_f)
         i=0
+        max_rangefft1, max_rangefft2 = 0,0
+
+
         start_time = pd.Timestamp.now()
         batching_time = 1
         time_window = timedelta(seconds=batching_time)
@@ -150,9 +161,10 @@ class RadarTracking():
                 self.radar_module.error = False
                 continue
             
-            avg_fft_linear,timestamp = self.process_radar_data(voltage_data)         
+            avg_fft_linear,timestamp, max_rangefft1, max_rangefft2 = self.process_radar_data(voltage_data, max_rangefft1, max_rangefft2)         
             timestamps.append(timestamp)
-
+            print("Max range fft1: ", max_rangefft1)
+            print("Max range fft2: ", max_rangefft2)
             if avglinear.size == 0:
                 avglinear = avg_fft_linear
             else:
@@ -235,6 +247,9 @@ class RadarTracking():
         avglinear = np.array([])
         i = 0  #i Represnets which frame is currently being assessed 
         timestamps = []
+
+        max_rangefft1, max_rangefft2 = 0,0
+
         deltaT = pd.Timestamp.now() -pd.Timestamp.now() 
         # Process each file one by one
         batching_time = 1
@@ -248,8 +263,9 @@ class RadarTracking():
             new_td_data = read_columns(file_path)
             
             #self.process_time_domain_data(new_td_data) #Change 
-            avg_fft_linear,timestamp = self.process_radar_data(new_td_data)
+            avg_fft_linear,timestamp, max_rangefft1, max_rangefft2 = self.process_radar_data(new_td_data, max_rangefft1, max_rangefft2)
             timestamps.append(timestamp)
+       
             if avglinear.size == 0:
                 avglinear = avg_fft_linear
             else:
