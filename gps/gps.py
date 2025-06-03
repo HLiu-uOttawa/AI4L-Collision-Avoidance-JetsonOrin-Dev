@@ -17,13 +17,13 @@ class GPS:
             with open(config_path, 'r') as config_file:
                 config = yaml.safe_load(config_file)
                 self.port = config.get("port")  # Allow port to be None initially
-                self.baud_rate = config.get("baud_rate", 9600)
+                self.baud_rate = config.get("baud_rate", 115200)
                 self.timeout = config.get("timeout", 1)
         except (FileNotFoundError, yaml.YAMLError) as e:
             print(f"Error loading config file: {e}")
             # Set default values if config fails
             self.port = None
-            self.baud_rate = 9600
+            self.baud_rate = 115200
             self.timeout = 1
 
     def list_ports(self):
@@ -86,51 +86,55 @@ class GPS:
     #     UBX_RMC_OFF = bytes.fromhex("B5 62 06 01 08 00 F0 04 00 00 00 00 00 00 FF 2B")
     #     self.send_ubx_command(UBX_RMC_OFF)
 
-    def read_data(self):
-        """Read and parse GPS data."""
+    def read_data(self, gps_current_data):
+        """Read and parse multiple GPS messages per second (e.g. at 5Hz or 10Hz)."""
         if not self.serial_connection:
             print("No serial connection established.")
             return
 
+        buffer = b""
+
         try:
             while True:
-                line = self.serial_connection.readline().decode('ascii', errors='ignore').strip()
-                # print(line)
-                # lines = self.serial_connection.readlines()
-                # print(lines)
+                # Read available bytes
+                bytes_waiting = self.serial_connection.in_waiting
+                if bytes_waiting > 0:
+                    buffer += self.serial_connection.read(bytes_waiting)
 
-                # if line.startswith("$GPGGA") or line.startswith("$GPRMC"):
-                if line.startswith("$GPRMC"):
-                    ...
-                if line.startswith("$GPGGA"):
-                    # print(line)
-                    try:
-                        msg = pynmea2.parse(line)
-                        # print(f"Latitude: {msg.latitude}, Longitude: {msg.longitude}, Time: {msg.timestamp}")
-                        now = datetime.datetime.now()
-                        timestamp = now.strftime("%Y-%m-%d_%H-%M-%S.%f")[:-3]
-                        gps_data_line = timestamp + "," + \
-                                        str(msg.latitude) + "," + \
-                                        str(msg.longitude) + "," + \
-                                        str(msg.altitude) + "," + \
-                                        str(msg.timestamp)
+                    # Split buffer into lines
+                    lines = buffer.split(b'\n')
+                    buffer = lines[-1]  # Keep last (incomplete) line
+                    lines = lines[:-1]
 
-                        script_dir = os.path.dirname(os.path.abspath(__file__))
-                        file_path = "./gps_data/gps_data.tmp"
-                        file_path = os.path.join(script_dir, file_path)
+                    for raw_line in lines:
+                        try:
+                            line = raw_line.decode('ascii', errors='ignore').strip()
+                            if line.startswith("$GPGGA"):
+                                print(f"[GPGGA] {line}")
+                                msg = pynmea2.parse(line)
+                                now = datetime.datetime.now()
+                                timestamp = now.strftime("%Y-%m-%d_%H-%M-%S.%f")[:-3]
+                                gps_data_line = f"{timestamp},{msg.latitude},{msg.longitude},{msg.altitude or 0.0},{msg.timestamp}"
 
-                        if not os.path.exists(file_path):
-                            gps_data_head = "Timestamp, latitude, longitude, altitude, GpsTime"
-                            with open(file_path, 'w') as file:
-                                file.write(gps_data_head + '\n')
-                                # print(gps_data_head)
-                        else:
-                            # if file exists, append one line of data
-                            with open(file_path, 'a') as file:
-                                file.write(gps_data_line + '\n')
-                                # print(gps_data_line)
-                    except pynmea2.ParseError as e:
-                        print(f"Parse error: {e}")
+                                script_dir = os.path.dirname(os.path.abspath(__file__))
+                                file_path = os.path.join(script_dir, "gps_data", "gps_data.tmp")
+
+                                os.makedirs(os.path.dirname(file_path), exist_ok=True)
+
+                                if not os.path.exists(file_path):
+                                    with open(file_path, 'w') as file:
+                                        file.write("Timestamp, latitude, longitude, altitude, GpsTime\n")
+
+                                gps_current_data.cur = gps_data_line
+
+                                with open(file_path, 'a') as file:
+                                    file.write(gps_data_line + '\n')
+
+                        except pynmea2.ParseError:
+                            continue
+
+                time.sleep(0.01)  # Slight delay to reduce CPU load
+
         except KeyboardInterrupt:
             print("Exiting...")
         finally:
@@ -142,10 +146,80 @@ class GPS:
             self.serial_connection.close()
             print("Disconnected from GPS.")
 
+    def set_gpgga_output_rate(self, rate_hz):
+        """
+        Set the output frequency of GPGGA message (NMEA) to match the update rate.
+        Works on u-blox modules via UBX-CFG-MSG.
+        """
+        if not self.serial_connection or not self.serial_connection.is_open:
+            print("Serial port is not open.")
+            return
 
-def gps_process(stop_event, gps_data_queue):
+        msg_class = 0xF0  # NMEA message class
+        msg_id = 0x00  # GPGGA
+        rate = rate_hz  # Output rate on UART1
+
+        # UBX-CFG-MSG structure: Class, ID, Rates[6]
+        payload = bytes([msg_class, msg_id]) + bytes([rate, 0, 0, 0, 0, 0])
+
+        # Header
+        header = b'\xB5\x62\x06\x01' + len(payload).to_bytes(2, 'little')
+
+        # Checksum
+        ck_a = 0
+        ck_b = 0
+        for b in payload:
+            ck_a = (ck_a + b) & 0xFF
+            ck_b = (ck_b + ck_a) & 0xFF
+
+        checksum = bytes([ck_a, ck_b])
+        message = header + payload + checksum
+
+        self.serial_connection.write(message)
+        print(f"GPGGA message output rate set to {rate_hz} Hz.")
+
+    def set_update_rate(self, rate_hz):
+        """
+        Set the GPS update rate (position output frequency) in Hz.
+        This function sends a UBX-CFG-RATE command to u-blox-based GPS modules.
+
+        :param rate_hz: Desired update rate in Hz, e.g., 1, 5, or 10.
+        """
+        if not self.serial_connection or not self.serial_connection.is_open:
+            print("Serial port is not open. Cannot set update rate.")
+            return
+
+        # Calculate measurement rate in milliseconds (e.g., 5Hz = 200ms)
+        meas_rate_ms = int(1000 / rate_hz)
+        nav_rate = 1  # Number of measurements per navigation solution
+        time_ref = 1  # 0 = UTC, 1 = GPS time
+
+        # Build payload: measRate (2 bytes), navRate (2 bytes), timeRef (2 bytes)
+        payload = meas_rate_ms.to_bytes(2, 'little') + \
+                  nav_rate.to_bytes(2, 'little') + \
+                  time_ref.to_bytes(2, 'little')
+
+        # Build UBX-CFG-RATE message header
+        header = b'\xB5\x62\x06\x08' + len(payload).to_bytes(2, 'little')
+
+        # Compute checksum over the payload
+        ck_a = 0
+        ck_b = 0
+        for b in payload:
+            ck_a = (ck_a + b) & 0xFF
+            ck_b = (ck_b + ck_a) & 0xFF
+
+        checksum = bytes([ck_a, ck_b])
+        message = header + payload + checksum
+
+        # Send the command over serial
+        self.serial_connection.write(message)
+        print(f"GPS update rate set to {rate_hz} Hz.")
+
+
+def gps_process(stop_event, gps_data_queue, gps_current_data):
     print("Starting gps process...")
-    file_path = "./gps_data/gps_data.tmp"
+    file_path = "./gps_data/gps_data.dat"
     if os.path.exists(file_path):
         creation_time = os.path.getctime(file_path)
         formatted_time = time.strftime('%Y-%m-%d-%H-%M-%S', time.localtime(creation_time))
@@ -158,11 +232,13 @@ def gps_process(stop_event, gps_data_queue):
     gps = GPS(config_file_path)
 
     gps.connect()
+    # gps.set_update_rate(5)
+    # gps.set_gpgga_output_rate(5)
 
     # gps.enable_gpgga()  # 发送 GPGGA 使能命令
     # gps.disable_gprmc()  # 关闭 GPRMC
 
-    gps.read_data()
+    gps.read_data(gps_current_data)
     # ...
 
 

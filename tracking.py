@@ -35,7 +35,13 @@ def radar_tracking_task(stop_event, config: RadarConfiguration, start_time: pd.T
     radar_tracking.object_tracking(stop_event)
 
 
-def process_queues(stop_event, tracker, image_data_queue, radar_data_queue, imu_status, batching_time=1):
+def process_queues(stop_event,
+                   tracker,
+                   image_data_queue,
+                   radar_data_queue,
+                   imu_status,
+                   gps_current_data,
+                   batching_time=1):
     count = 1
     last_print_time = datetime.now()
     last_remove_tracks_time = datetime.now()
@@ -59,11 +65,12 @@ def process_queues(stop_event, tracker, image_data_queue, radar_data_queue, imu_
     detect_output_file_path = os.path.join("data/", detect_output_file_name)
     radar_timestamps = []
 
-
     while not stop_event.is_set():
-        
-        print(f"In process_queue: {imu_status}")
-        
+
+        # uncomment below code to test the info from imu and gps threads
+        # print(f"In process_queue: {imu_status}")
+        # print(f"In process_queue: {gps_current_data.cur}")
+
         processed_anything = False
         image_detections_in_window = []
         radar_detections_in_window = []
@@ -250,6 +257,9 @@ def plot_data(plot_queue: mp.Queue, stop_event):
 
 
 if __name__ == '__main__':
+
+    manager = mp.Manager()
+
     start_time = pd.Timestamp.now()
     parser = define_argument_parser()
     parser.set_defaults(download=True)
@@ -266,26 +276,35 @@ if __name__ == '__main__':
     imu_data_queue = None
     gps_data_queue = None
 
+    # imu_status = None
+    # gps_current_data = None
 
-    imu_status = None
+    imu_status = manager.Namespace()
+    
+    gps_current_data = manager.Namespace()
+    gps_current_data.cur = None
 
     # Generate a IMU Processing
     if not args.skip_imu:
         print("Process imu and save data...")
         imu_data_queue = mp.Queue()
-        imu_status = mp.Manager().Namespace()
+        # imu_status = mp.Manager().Namespace()
 
         imu_proc = mp.Process(
-        	name="imu_processing",
-        	target=imu.imu_process,
-        	args=(stop_event, imu_data_queue, imu_status))
+            name="imu_processing",
+            target=imu.imu_process,
+            args=(stop_event, imu_data_queue, imu_status))
         imu_proc.start()
 
     # Generate a GPS Processing
     if not args.skip_gps:
         print("Process gps and save data...")
         gps_data_queue = mp.Queue()
-        gps_proc = mp.Process(name="gps_processing", target=gps.gps_process, args=(stop_event, gps_data_queue,))
+
+        gps_proc = mp.Process(
+            name="gps_processing",
+            target=gps.gps_process,
+            args=(stop_event, gps_data_queue, gps_current_data))
         gps_proc.start()
 
     # Create the video tracking configuration, process, queue to move data
@@ -318,19 +337,21 @@ if __name__ == '__main__':
         tracking_config = TrackingConfiguration()
         tracking_config = update_tracking_config(tracking_config,
                                                  args)  # Update the video configuration with the command line arguments
-        tracking_config.max_track_distance = radar_config.bin_size_meters * 512  # Override the max distance based on radar range
+        if not args.skip_radar:
+            tracking_config.max_track_distance = radar_config.bin_size_meters * 512  # Override the max distance based on radar range
         tracker = get_object_tracking_gm_phd(start_time, tracking_config)
 
         # Queue process to handle incoming data
         tracking_proc = mp.Process(
-        	name="Tracking",
-        	target=process_queues,
+            name="Tracking",
+            target=process_queues,
             args=(stop_event,
-            	tracker,
-            	image_data_queue,
-            	radar_data_queue, 
-            	imu_status,
-            	args.batching_time))
+                  tracker,
+                  image_data_queue,
+                  radar_data_queue,
+                  imu_status,
+                  gps_current_data,
+                  args.batching_time))
         tracking_proc.start()
 
     try:

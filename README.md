@@ -18,3 +18,9 @@ JetPack 6.2 / L4T 36.4.3 / kernel 5.15.148-tegra
    pip3 install qrcode[pil] pyzbar
 
    python .\tracking.py --skip-radar --skip-video --skip-imu --skip-gps --skip-tracking
+
+
+# Hardware:
+## VK-162 G-Mouse USB GPS Dongle
+[GitHub - VK-16_GPS](https://github.com/AbdullahJirjees/VK-16_GPS/tree/main)
+[GNSS evaluation software for Windows](https://www.u-blox.com/en/product/u-center)
