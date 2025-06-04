@@ -174,21 +174,25 @@ def process_queues(stop_event,
 
             np.savetxt(detect_output_file_path, detect_output, delimiter=", ", fmt='% s')
 
+
             # Add the code from Sina to communicate with server
-            import socket
-            import json
 
-            HOST = 'localhost'
-            PORT = 65432
+            # import socket
+            # import json
+            #
+            # HOST = 'localhost'
+            # PORT = 65432
+            #
+            # with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            #     s.connect((HOST, PORT))
+            #     message = {"collision": 1}
+            #     s.sendall(json.dumps(message).encode())
+            #
+            #     data = s.recv(1024)
+            #     response = json.loads(data.decode())
+            #     print("Server Response:", response)
 
-            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                s.connect((HOST, PORT))
-                message = {"collision": 1}
-                s.sendall(json.dumps(message).encode())
 
-                data = s.recv(1024)
-                response = json.loads(data.decode())
-                print("Server Response:", response)
             #
 
             # vb = np.array([r*np.cos(visEl[k])*np.cos(visAz[k]),
