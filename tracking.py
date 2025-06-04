@@ -57,7 +57,7 @@ def process_queues(stop_event,
     radar_total = [['timestamp', 'x', 'x_v', 'y', 'y_v']]
     img_temp = [['azi', 'ela', 'dist']]
 
-    detect_output = [['timestamp', 'azimuth', 'elavation', 'distance_camera', 'dist_radar']]
+    detect_output = [['timestamp', 'azimuth', 'elevation', 'distance_camera', 'dist_radar']]
     detect_timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")[:-3]
     detect_output_file_name = "detect_data_" + detect_timestamp + ".csv"
 
