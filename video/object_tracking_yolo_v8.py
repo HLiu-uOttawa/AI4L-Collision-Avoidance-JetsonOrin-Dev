@@ -11,6 +11,7 @@ import pandas as pd
 import re
 from video.object_location_size import CameraDetails, object_location
 from video.VideoConfiguration import VideoConfiguration
+import threading
 
 import cv2
 
@@ -118,13 +119,21 @@ def detection_from_bbox(yolo_box, detected_object, camera_details: CameraDetails
                             polar_range_data)  # DetectionDetails(detected_object, [x, 0.2, y, 0.2]) #TODO Return Detect details on camera
 
 
-import threading
 
+# ------------------------------ Async image saving ------------------------------
 def save_frame_async(image, filename):
+    """
+    Asynchronously save a PIL Image to disk without blocking the main thread.
+
+    Args:
+        image (PIL.Image.Image): The image to save.
+        filename (str): The target file path for saving the image.
+    """
     def worker():
         image.save(filename)
     threading.Thread(target=worker, daemon=True).start()
 
+# ------------------------------ track_objects ------------------------------
 def track_objects(stop_event, video_config: VideoConfiguration, start_time: pd.Timestamp, data_queue: mp.Queue = None):
     ### PARAMs to the program
     model_weights = video_config.modelWeights
@@ -184,8 +193,8 @@ def track_objects(stop_event, video_config: VideoConfiguration, start_time: pd.T
 
             # Iterate over the detected objects, add tracking details into the detections_data list
             for box in result.boxes:
-                classificationIndex = box.cls[0].item()
-                detected_object = result.names[classificationIndex]
+                classification_index = box.cls[0].item()
+                detected_object = result.names[classification_index]
                 # print(f"Object: {detected_object}, Confidence { box.conf[0].item()}")
 
                 detection = detection_from_bbox(box, detected_object, camera_details=camera,
