@@ -24,12 +24,7 @@ CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
 OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """
-import sys, os
-import yaml
-
-import cv2
-from datetime import datetime
-
+import sys
 from typing import Optional
 from queue import Queue
 
@@ -124,117 +119,6 @@ def setup_camera(cam: Camera):
             pass
 
 
-def setup_camera(cam, config_path="CameraConfig.yaml"):
-    # Load camera configuration from YAML file
-    with open(config_path, 'r') as f:
-        cfg = yaml.safe_load(f)
-
-    print(f"\n[INFO] Loading camera configuration from '{config_path}'")
-
-    with cam:
-        # Set resolution
-        try:
-            cam.Width.set(cfg["Resolution"]["Width"])
-            cam.Height.set(cfg["Resolution"]["Height"])
-            print(f"[OK] Set resolution to {cfg['Resolution']['Width']} x {cfg['Resolution']['Height']}")
-        except Exception as e:
-            print(f"[WARN] Failed to set resolution: {e}")
-
-        # Set pixel format
-        try:
-            cam.set_pixel_format(PixelFormat[cfg["PixelFormat"]])
-            print(f"[OK] Set pixel format to {cfg['PixelFormat']}")
-        except Exception as e:
-            print(f"[WARN] Failed to set pixel format: {e}")
-
-        # Set exposure auto mode
-        try:
-            cam.ExposureAuto.set(cfg["ExposureAuto"])
-            print(f"[OK] Set exposure auto mode to {cfg['ExposureAuto']}")
-        except Exception as e:
-            print(f"[WARN] Failed to set exposure auto mode: {e}")
-
-        # Set exposure time
-        try:
-            if cfg["ExposureAuto"] == "Off":
-                cam.ExposureTime.set(cfg["ExposureTime"])
-                print(f"[OK] Set exposure time to {cfg['ExposureTime']} µs")
-        except Exception as e:
-            print(f"[WARN] Failed to set exposure time: {e}")
-
-        # Set gain
-        try:
-            cam.Gain.set(cfg["Gain"])
-            print(f"[OK] Set gain to {cfg['Gain']}")
-        except Exception as e:
-            print(f"[WARN] Failed to set gain: {e}")
-
-        # Set white balance auto mode
-        try:
-            cam.BalanceWhiteAuto.set(cfg["BalanceWhiteAuto"])
-            print(f"[OK] Set white balance auto mode to {cfg['BalanceWhiteAuto']}")
-        except Exception as e:
-            print(f"[WARN] Failed to set white balance auto: {e}")
-
-        # Set white balance ratio (Red and Blue)
-        try:
-            cam.BalanceRatioSelector.set("Red")
-            cam.BalanceRatio.set(cfg["BalanceRatio"]["Red"])
-            print(f"[OK] Set red balance ratio to {cfg['BalanceRatio']['Red']}")
-
-            cam.BalanceRatioSelector.set("Blue")
-            cam.BalanceRatio.set(cfg["BalanceRatio"]["Blue"])
-            print(f"[OK] Set blue balance ratio to {cfg['BalanceRatio']['Blue']}")
-        except Exception as e:
-            print(f"[WARN] Failed to set white balance ratios: {e}")
-
-        # Set frame rate
-        try:
-            cam.AcquisitionFrameRateEnable.set(cfg["AcquisitionFrameRateEnable"])
-            print(f"[OK] AcquisitionFrameRateEnable = {cfg['AcquisitionFrameRateEnable']}")
-            if cfg["AcquisitionFrameRateEnable"]:
-                cam.AcquisitionFrameRate.set(cfg["AcquisitionFrameRate"])
-                print(f"[OK] Set frame rate to {cfg['AcquisitionFrameRate']} fps")
-        except Exception as e:
-            print(f"[WARN] Failed to set frame rate: {e}")
-
-        # Adjust GigE packet size (if available)
-        try:
-            stream = cam.get_streams()[0]
-            stream.GVSPAdjustPacketSize.run()
-            while not stream.GVSPAdjustPacketSize.is_done():
-                pass
-            print(f"[OK] Adjusted GigE packet size")
-        except Exception as e:
-            print(f"[INFO] Skipped GigE packet size adjustment: {e}")
-
-    print("[INFO] Camera configuration applied.\n")
-
-
-def print_camera_parameters(cam):
-    print("\n========= Camera Parameters =========")
-
-    with cam:
-        def try_get(attr):
-            try:
-                return getattr(cam, attr).get()
-            except Exception:
-                return "N/A"
-
-        print(f"Camera ID         : {cam.get_id()}")
-        print(f"Model Name        : {cam.get_model()}")
-        print(f"Interface         : {cam.get_interface_id()}")
-        print(f"Pixel Format      : {try_get('PixelFormat')}")
-        print(f"Resolution        : {try_get('Width')} x {try_get('Height')}")
-        print(f"Frame Rate Enable : {try_get('AcquisitionFrameRateEnable')}")
-        print(f"Frame Rate (fps)  : {try_get('AcquisitionFrameRate')}")
-        print(f"Exposure Auto     : {try_get('ExposureAuto')}")
-        print(f"Exposure Time     : {try_get('ExposureTime')} µs")
-        print(f"Gain              : {try_get('Gain')}")
-        print(f"White Balance Auto: {try_get('BalanceWhiteAuto')}")
-
-    print("=====================================\n")
-
 def setup_pixel_format(cam: Camera):
     # Query available pixel formats. Prefer color formats over monochrome formats
     cam_formats = cam.get_pixel_formats()
@@ -290,33 +174,29 @@ def main():
     print_preamble()
     cam_id = parse_args()
 
-    save_dir = "frames"
-    os.makedirs(save_dir, exist_ok=True)
-
     with VmbSystem.get_instance():
         with get_camera(cam_id) as cam:
             # setup general camera settings and the pixel format in which frames are recorded
-            # setup_camera(cam)
-            setup_camera(cam, config_path="CameraConfig.yaml")
+            setup_camera(cam)
             setup_pixel_format(cam)
-            print_camera_parameters(cam)
-
             handler = Handler()
 
             try:
                 # Start Streaming with a custom a buffer of 10 Frames (defaults to 5)
                 cam.start_streaming(handler=handler, buffer_count=10)
 
+                msg = 'Stream from \'{}\'. Press <Enter> to stop stream.'
+                import cv2
                 ENTER_KEY_CODE = 13
                 while True:
-                    img = handler.get_image()
+                    key = cv2.waitKey(1)
+                    if key == ENTER_KEY_CODE:
+                        cv2.destroyWindow(msg.format(cam.get_name()))
+                        break
 
-                    now = datetime.now()
-                    timestamp = now.strftime("%Y%m%d_%H%M%S_%f")[:-3]  # 精确到毫秒
-                    filename = os.path.join(save_dir, f"{timestamp}.jpg")
+                    display = handler.get_image()
+                    cv2.imshow(msg.format(cam.get_name()), display)
 
-                    cv2.imwrite(filename, img)
-            
             finally:
                 cam.stop_streaming()
 

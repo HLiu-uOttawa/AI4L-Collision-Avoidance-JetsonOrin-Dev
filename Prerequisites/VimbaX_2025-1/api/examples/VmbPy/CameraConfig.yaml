@@ -1,0 +1,16 @@
+# CameraConfig.yaml
+
+PixelFormat: Bgr8
+Resolution:
+  Width: 1920
+  Height: 1080
+ExposureAuto: Off
+ExposureTime: 20000.0     # in microseconds
+Gain: 5.0
+BalanceWhiteAuto: Off
+BalanceRatio:
+  Red: 2.0
+  Blue: 1.8
+AcquisitionFrameRateEnable: True
+AcquisitionFrameRate: 10.0
+
