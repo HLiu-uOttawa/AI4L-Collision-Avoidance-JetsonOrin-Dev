@@ -110,7 +110,7 @@ class GPS:
                         try:
                             line = raw_line.decode('ascii', errors='ignore').strip()
                             if line.startswith("$GPGGA"):
-                                print(f"[GPGGA] {line}")
+                                # print(f"[GPGGA] {line}")
                                 msg = pynmea2.parse(line)
                                 now = datetime.datetime.now()
                                 timestamp = now.strftime("%Y-%m-%d_%H-%M-%S.%f")[:-3]

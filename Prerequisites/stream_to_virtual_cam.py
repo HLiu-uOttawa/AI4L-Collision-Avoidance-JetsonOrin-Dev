@@ -38,8 +38,8 @@ def add_qrcode_to_image(np_image, text, qr_size=60):
 def setup_camera(cam: Camera):
     with cam:
         try:
-            cam.BinningHorizontal.set(2)
-            cam.BinningVertical.set(2)
+            cam.BinningHorizontal.set(3)
+            cam.BinningVertical.set(3)
         except:
             print("Binning to 2x2: failed")
 

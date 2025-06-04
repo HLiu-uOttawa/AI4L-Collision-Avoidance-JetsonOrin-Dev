@@ -163,8 +163,8 @@ class RadarTracking():
             
             avg_fft_linear,timestamp, max_rangefft1, max_rangefft2 = self.process_radar_data(voltage_data, max_rangefft1, max_rangefft2)         
             timestamps.append(timestamp)
-            print("Max range fft1: ", max_rangefft1)
-            print("Max range fft2: ", max_rangefft2)
+            # print("Max range fft1: ", max_rangefft1)
+            # print("Max range fft2: ", max_rangefft2)
             if avglinear.size == 0:
                 avglinear = avg_fft_linear
             else:
