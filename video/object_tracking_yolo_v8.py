@@ -17,6 +17,7 @@ import cv2
 from pyzbar.pyzbar import decode
 import cv2
 
+
 def read_qrcode_from_image(np_image):
     # Ensure the image is either grayscale or color.
     decoded_objects = decode(np_image)
@@ -24,6 +25,7 @@ def read_qrcode_from_image(np_image):
         data = obj.data.decode("utf-8")
         return data  # Return the content of the first QR code.
     return None
+
 
 def extract_timestamp_from_filename(filename):
     """
@@ -116,6 +118,13 @@ def detection_from_bbox(yolo_box, detected_object, camera_details: CameraDetails
                             polar_range_data)  # DetectionDetails(detected_object, [x, 0.2, y, 0.2]) #TODO Return Detect details on camera
 
 
+import threading
+
+def save_frame_async(image, filename):
+    def worker():
+        image.save(filename)
+    threading.Thread(target=worker, daemon=True).start()
+
 def track_objects(stop_event, video_config: VideoConfiguration, start_time: pd.Timestamp, data_queue: mp.Queue = None):
     ### PARAMs to the program
     model_weights = video_config.modelWeights
@@ -160,25 +169,17 @@ def track_objects(stop_event, video_config: VideoConfiguration, start_time: pd.T
                 print("Video playback ended.")
                 break
 
-        # print(f"Got frame at {datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]}")
-        # time.sleep(0.1)
-
-        height, width, channels = frame.shape
-        # print(f"Got frame at {datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]}, size: {width}x{height}, channels: {channels}")
-
         results = model.track(frame, persist=True, conf=confidence_threshold, iou=iou_threshold, verbose=False)
         for i, result in enumerate(results):
             # If configured, saved the original image to disk, in the <output_folder>/raw/*
             if save_raw_img:
                 orig_img_rgb = Image.fromarray(result.orig_img[..., ::-1])  # Convert BGR to RGB
 
-                # Modified by Brian on Mar 20, 2025,
                 timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S.%f")[:-3]
                 filename = os.path.join(output_folder, "raw", f"frame_{i:05d}_{timestamp}.png")
-                orig_img_rgb.save(filename)
-                # orig_img_rgb.save(os.path.join(output_folder, "raw", f"image_{i}_{orig_img_w}x{orig_img_h}.jpg"))
+                save_frame_async(orig_img_rgb, filename)
 
-            detectionTimestamp = datetime.now().replace(microsecond=0)
+            detection_timestamp = datetime.now().replace(microsecond=0)
             detections = []
 
             # Iterate over the detected objects, add tracking details into the detections_data list
@@ -194,53 +195,20 @@ def track_objects(stop_event, video_config: VideoConfiguration, start_time: pd.T
 
             # If a data_queue is provided, put the detections into the queue
             if data_queue is not None and len(detections) > 0:
-                data_queue.put(DetectionsAtTime(detectionTimestamp, IMAGE_DETECTION_TYPE, detections))
+                data_queue.put(DetectionsAtTime(detection_timestamp, IMAGE_DETECTION_TYPE, detections))
 
             # time.sleep(video_config.videoDelayBetweenProcessingSec)
 
     # ------------------------------------------------------------------------------------------------
     # model.add_callback("on_predict_batch_end", on_predict_batch_end)
-
-    # save_crops=True # save detected crops as .jpg files, of the individual objects detected
-    results = model.track(source=source, conf=confidence_threshold, iou=iou_threshold, save=save_detection_video,
-                          show=show, stream=stream, project=output_folder, show_boxes=show_boxes)
-
-    for i, result in enumerate(results):
-
-        if stop_event.is_set():
-            break
-        orig_img_h = result.orig_img.shape[0]
-        orig_img_w = result.orig_img.shape[1]
-
-        # If configured, saved the original image to disk, in the <output_folder>/raw/*
-        if save_raw_img:
-            orig_img_rgb = Image.fromarray(result.orig_img[..., ::-1])  # Convert BGR to RGB
-
-            # Modified by Brian on Mar 20, 2025,
-            timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S.%f")[:-3]
-            filename = os.path.join(output_folder, "raw", f"frame_{i:05d}_{timestamp}.jpg")
-            orig_img_rgb.save(filename)
-            # orig_img_rgb.save(os.path.join(output_folder, "raw", f"image_{i}_{orig_img_w}x{orig_img_h}.jpg"))
-
-        detectionTimestamp = datetime.now().replace(microsecond=0)
-        detections = []
-
-        # Iterate over the detected objects, add tracking details into the detections_data list
-        for box in result.boxes:
-            classificationIndex = box.cls[0].item()
-            detected_object = result.names[classificationIndex]
-            # print(f"Object: {detected_object}, Confidence { box.conf[0].item()}")
-
-            detection = detection_from_bbox(box, detected_object, camera_details=camera,
-                                            print_details=video_config.printDetectedObjects)
-
-            detections.append(detection)
-
-        # If a data_queue is provided, put the detections into the queue
-        if data_queue is not None and len(detections) > 0:
-            data_queue.put(DetectionsAtTime(detectionTimestamp, IMAGE_DETECTION_TYPE, detections))
-
-        time.sleep(video_config.videoDelayBetweenProcessingSec)
+    # results = model.track(source=source,
+    #                       conf=confidence_threshold,
+    #                       iou=iou_threshold,
+    #                       save=save_detection_video,
+    #                       show=show,
+    #                       stream=stream,
+    #                       project=output_folder,
+    #                       show_boxes=show_boxes)
 
 
 if __name__ == "__main__":
