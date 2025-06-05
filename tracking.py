@@ -57,7 +57,7 @@ def process_queues(stop_event,
     radar_total = [['timestamp', 'x', 'x_v', 'y', 'y_v']]
     img_temp = [['azi', 'ela', 'dist']]
 
-    detect_output = [['timestamp', 'azimuth', 'elevation', 'distance_camera', 'dist_radar']]
+    detect_output = [['timestamp_image', 'timestamp_radar', 'azimuth', 'elevation', 'distance_camera', 'distance_radar']]
     detect_timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")[:-3]
     detect_output_file_name = "detect_data_" + detect_timestamp + ".csv"
 
@@ -165,14 +165,14 @@ def process_queues(stop_event,
                 image_detections_in_window[-1].timestamp, radar_detections_in_window[-1].timestamp
             )
             combined_detections = (
-                    [img_time] + image_detections_in_window[-1].detections[0].get_data() + radar_detections_in_window[
-                combination_index].detections
+                    [img_time] + [radar_detections_in_window[ combination_index].timestamp]  + image_detections_in_window[-1].detections[0].get_data() + radar_detections_in_window[ combination_index].detections
+                    
             )
             print("data fusion___________________________________________________________")
             # print(combined_detections)
             detect_output.append(combined_detections)
 
-            np.savetxt(detect_output_file_path, detect_output, delimiter=", ", fmt='% s')
+            np.savetxt(detect_output_file_path, detect_output, delimiter=",", fmt='% s')
 
 
             # Add the code from Sina to communicate with server
@@ -220,7 +220,11 @@ def process_queues(stop_event,
 
             radar_timestamp = radar_detections_in_window[-1].timestamp
             radar_detections = radar_detections_in_window[-1].detections
-
+            radar_buffer_length = len(radar_detections_in_window)
+            i = 0
+            while i< radar_buffer_length:
+                radar_buffer.append(radar_detections_in_window[i]) 
+                i = i+1
             # tracker.update_tracks([radar_detections], radar_timestamp, type="radar_only")
 
         else:
