@@ -1,6 +1,6 @@
 .venv
 .idea
-data
+#data
 output
 
 imu/imu_data/imu_data.tmp
