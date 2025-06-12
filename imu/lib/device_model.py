@@ -4,50 +4,51 @@ import _thread
 import time
 import struct
 import serial
+import serial.tools.list_ports
 from serial import SerialException
 '''
-    串口配置
+    Serial port parameter configuration
 '''
 
 
 class SerialConfig:
-    # 端口
+
+    # port
     portName = ''
 
-    # 波特率
+    # Baud rate
     baud = 9600
 
 '''
-设备模型
+Device model
 '''
 
 
 class DeviceModel:
-    # 设备名称
-    deviceName = "我的设备"
+    # Device name
+    deviceName = "My Device"
 
-    #设备ID
+    # Device ID
     ADDR = 0x50
 
-    # 设备数据字典
+    # Device data dictionary
     deviceData = {}
 
-    # 是否卡开
     isOpen = False
 
-    # 串口
+    # Serial port
     serialPort = None
 
-    # 串口配置
+    # Serial port configuration
     serialConfig = SerialConfig()
 
-    # 更新触发器
+    # Update trigger
     dataUpdateListener = ""
 
-    # 数据解析器
+    # Data parser
     dataProcessor = None
 
-    # 协议解析器
+    # Protocol parser
     protocolResolver = None
 
     def __init__(self, deviceName, protocolResolver, dataProcessor, dataUpdateListener):
@@ -60,18 +61,18 @@ class DeviceModel:
 
     def setDeviceData(self, key, value):
         """
-        设置设备数据
-        :param key: 数据key
-        :param value: 数据值
-        :return: 无返回
+        Configure device data
+        :param key: Data key
+        :param value: Data value
+        :return: No return value
         """
         self.deviceData[key] = value
 
     def getDeviceData(self, key):
         """
-        获得设备数据
-        :param key: 数据key
-        :return: 返回数据值，不存在的数据key则返回None
+        Retrieve device data
+        :param key: Data key
+        :return: Return the data value; if the key does not exist, return None.
         """
         if ( key in self.deviceData):
             return self.deviceData[key]
@@ -80,20 +81,20 @@ class DeviceModel:
 
     def removeDeviceData(self, key):
         """
-        删除设备数据
-        :param key: 数据key
-        :return: 无反回
+        Delete device data
+        :param key: Data key
+        :return: No return value
         """
         del self.deviceData[key]
 
     def readDataTh(self, threadName, delay):
         """
-        读取数据线程
+        Thread for reading data
         :return:
         """
         print("Start " + threadName)
         while True:
-            # 如果串口打开了
+            # If the serial port is open
             if self.isOpen:
                 try:
                     tlen = self.serialPort.inWaiting()
@@ -104,24 +105,53 @@ class DeviceModel:
                     print(ex)
             else:
                 time.sleep(0.1)
-                print("暂停")
+                print("Pausing")
                 break
 
     def openDevice(self):
         """
-        Open Device
-        :return: none
-        """
+                Attempts to open the serial port connection for the device.
 
-        # Close device first
+                This method first closes any existing serial connection to prevent conflicts.
+                It then attempts to open the serial port specified in `self.serialConfig.portName`
+                using the configured baud rate (`self.serialConfig.baud`). If the port is successfully
+                opened, a background thread is started to continuously read incoming data.
+
+                Key Features:
+                - Automatically closes any previously opened port
+                - Checks whether the specified port exists on the system
+                - Provides clear error messages if the port cannot be found or opened
+                - Starts a separate thread for non-blocking serial data reading upon success
+
+                Notes:
+                - Ensure the device is properly connected before calling this method
+                - Set the correct port name (e.g., "COM3" on Windows or "/dev/ttyUSB0" on Linux)
+                - If the port is already in use by another program, opening will fail
+
+                :return: None
+                """
+
         self.closeDevice()
+
+        print(f"Try to connect IMU on {self.serialConfig.portName} ----------------")
+        available_ports = [p.device for p in serial.tools.list_ports.comports()]
+        if self.serialConfig.portName not in available_ports:
+            print(f"[Error] Serial port '{self.serialConfig.portName}' not found.")
+            return
         try:
-            self.serialPort = serial.Serial(self.serialConfig.portName, self.serialConfig.baud, timeout=0.5)
+            self.serialPort = serial.Serial(
+                self.serialConfig.portName,
+                self.serialConfig.baud,
+                timeout=0.5)
             self.isOpen = True
-            t = threading.Thread(target=self.readDataTh, args=("Data-Received-Thread",10,))          # 开启一个线程接收数据
+            # Start a thread to receive data.
+            t = threading.Thread(target=self.readDataTh, args=("Data-Received-Thread",10,))
             t.start()
-        except SerialException:
-            print("Open" + self.serialConfig.portName + self.serialConfig.baud + "Failed")
+            print(f"[Info] Device opened on {self.serialConfig.portName} at {self.serialConfig.baud} baud.")
+        except SerialException as e:
+            print(f"[Error] Failed to open {self.serialConfig.portName} ({self.serialConfig.baud}): {e}")
+            print("Please check if the port is occupied or the device is connected properly.")
+            # print("Open" + self.serialConfig.portName + self.serialConfig.baud + "Failed")
 
     def closeDevice(self):
         """
@@ -136,17 +166,17 @@ class DeviceModel:
 
     def onDataReceived(self, data):
         """
-        接收数据时
-        :param data: 收到的数据
-        :return: 无返回
+        When receiving data
+        :param data: Received data
+        :return: No return value
         """
         if self.protocolResolver is not None:
             self.protocolResolver.passiveReceiveData(data, self)
 
     def get_int(self,dataBytes):
         """
-        int转换有符号整形   = C# BitConverter.ToInt16
-        :param dataBytes: 字节数组
+        Convert to signed integer (int) = C# BitConverter.ToInt16
+        :param dataBytes: Byte array
         :return:
         """
         #return -(data & 0x8000) | (data & 0x7fff)
@@ -154,7 +184,7 @@ class DeviceModel:
 
     def get_unint(self,dataBytes):
         """
-        int转换无符号整形
+        Convert a signed integer to an unsigned integer
         :param data:
         :return:
         """
@@ -163,17 +193,17 @@ class DeviceModel:
 
     def sendData(self, data):
         """
-        发送数据
-        :return: 是否发送成功
+        Send data
+        :return: Whether the data was sent successfully
         """
         if self.protocolResolver is not None:
             self.protocolResolver.sendData(data, self)
 
     def readReg(self, regAddr,regCount):
         """
-        读取寄存器
-        :param regAddr: 寄存器地址
-        :param regCount: 寄存器个数
+        Register Read
+        :param regAddr: register address
+        :param regCount: Number of registers
         :return:
         """
         if self.protocolResolver is not None:
@@ -183,9 +213,9 @@ class DeviceModel:
 
     def writeReg(self, regAddr):
         """
-        写入寄存器
-        :param regAddr: 寄存器地址
-        :param sValue: 写入值
+        Write to register
+        :param regAddr: Register address
+        :param sValue: Writing value
         :return:
         """
         if self.protocolResolver is not None:
@@ -193,7 +223,7 @@ class DeviceModel:
 
     def unlock(self):
         """
-        解锁
+        unlock
         :return:
         """
         if self.protocolResolver is not None:
@@ -201,7 +231,7 @@ class DeviceModel:
 
     def save(self):
         """
-        保存
+        save device data
         :return:
         """
         if self.protocolResolver is not None:
@@ -209,7 +239,7 @@ class DeviceModel:
 
     def AccelerationCalibration(self):
         """
-        加计校准
+        Accelerometer calibration
         :return:
         """
         if self.protocolResolver is not None:
@@ -217,7 +247,7 @@ class DeviceModel:
 
     def BeginFiledCalibration(self):
         """
-        开始磁场校准
+        Start magnetometer calibration
         :return:
         """
         if self.protocolResolver is not None:
@@ -225,7 +255,7 @@ class DeviceModel:
 
     def EndFiledCalibration(self):
         """
-        结束磁场校准
+        End magnetometer calibration
         :return:
         """
         if self.protocolResolver is not None:
@@ -233,7 +263,7 @@ class DeviceModel:
 
     def sendProtocolData(self, data):
         """
-        发送带协议的数据
+        Send protocol-based data
         :return:
         """
         if self.protocolResolver is not None:
