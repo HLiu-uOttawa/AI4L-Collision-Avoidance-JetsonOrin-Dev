@@ -115,6 +115,7 @@ def frame_handler(cam: Camera, stream: Stream, frame: Frame):
 
     # Push frame to virtual webcam
     fake_cam.schedule_frame(np_image)
+    print(f"Frame pushed:{full_timestamp}")
 
     # Optional: display preview window
     # cv2.imshow("Industrial Cam Preview", cv2.cvtColor(np_image, cv2.COLOR_RGB2BGR))
