@@ -71,8 +71,9 @@ class RadarTracking():
         MBW             = 750e6       # Clutter-rejection bandwidth
         wavelength      = c/fc_stop  # Wavelength (m)
         d               = 0.00625     # Element spacing (m)
-        Radar_trade_off_flag = 0     #For long range set it to 1, for high velocity set it to 0`
-        Threshold_dB    = 10
+        
+        Threshold_dB = 4  
+        lambda_ = c/fc_stop
         
         range_bin = c/(2*delta_f)
         range_axis   = np.linspace(0 ,range_bin*(numSamples/2-1) , int(numSamples/2))
@@ -101,18 +102,23 @@ class RadarTracking():
         cell_max_rangefft2 = max(abs(rangefft2))
 
         if cell_max_rangefft1 > max_rangefft1:
+             
             max_rangefft1 = cell_max_rangefft1
+
         if cell_max_rangefft2 > max_rangefft2:
+             
             max_rangefft2 = cell_max_rangefft2
         
-        rangefft1 = rangefft1/ max_rangefft1  #max(abs(rangefft1)) 
-        rangefft2 = rangefft2/  max_rangefft2  #max(abs(rangefft2)) 
+        rangefft1 = rangefft1/ max_rangefft1  #max(abs(rangefft1)) 0.09898119270814332
+        rangefft2 = rangefft2/  max_rangefft2  #max(abs(rangefft2)) 0.10022076782586087
         
-        rangefft1 = compensatePathloss_dB(rangefft1, range_axis_reversed, 1.15)
-        rangefft2 = compensatePathloss_dB(rangefft2, range_axis_reversed, 1.15)
-
+        rangefft1 = compensatePathloss_dB(rangefft1, range_axis_reversed, 1.5)
+        rangefft2 = compensatePathloss_dB(rangefft2, range_axis_reversed, 1.5)
+    
         rangefft1, a, time1 = Clutter_rejection(rangefft1, range_axis, 1, 1, MBW)
         rangefft2, a, time2 = Clutter_rejection(rangefft2, range_axis, 1, 2, MBW)
+
+         
 
         avg_fft_linear =abs((abs(rangefft1) - abs(rangefft2)))
         return avg_fft_linear, timestamp, max_rangefft1, max_rangefft2
@@ -136,9 +142,12 @@ class RadarTracking():
         fc_stop         = 24.75e9
         delta_f         = fc_stop - fc_start
         c               = 3e8         # Speed of light (m/s)
+        ramp_time       = 1e-3
         numSamples = 1024
         Radar_trade_off_flag = 0     #For long range set it to 1, for high velocity set it to 0`
-        Threshold_dB    = 10
+        range_threshold = 85
+        Threshold_dB = 4 
+        lambda_ = c/fc_stop
         range_bin = c/(2*delta_f)
         range_axis   = np.linspace(0 ,range_bin*(numSamples/2-1) , int(numSamples/2))
         range_axis_reversed      = range_axis[::-1]
@@ -148,12 +157,13 @@ class RadarTracking():
         i=0
         max_rangefft1, max_rangefft2 = 0,0
 
-
+        
         start_time = pd.Timestamp.now()
         batching_time = 1
         time_window = timedelta(seconds=batching_time)
         window_start= pd.Timestamp.now()
         window_end = window_start + time_window
+
         while not stop_event.is_set():
             voltage_data = get_td_data_voltage(self.radar_module)
             if voltage_data is None:
@@ -163,14 +173,15 @@ class RadarTracking():
             
             avg_fft_linear,timestamp, max_rangefft1, max_rangefft2 = self.process_radar_data(voltage_data, max_rangefft1, max_rangefft2)         
             timestamps.append(timestamp)
-            # print("Max range fft1: ", max_rangefft1)
-            # print("Max range fft2: ", max_rangefft2)
+
+            avg_fft_linear = avg_fft_linear*avg_fft_linear
+            
             if avglinear.size == 0:
                 avglinear = avg_fft_linear
             else:
                 avglinear = np.column_stack((  avglinear, avg_fft_linear))
                 
-            window_size = int(20) #Adjust window size
+            window_size = int(50) #Adjust window size
    
             #Gather multiple frames for window
             window_start= pd.Timestamp.now()
@@ -181,30 +192,81 @@ class RadarTracking():
                 start_time = pd.Timestamp.now()
                 if avglinear.size > numSamples:
                     
-                    if Radar_trade_off_flag:
-                        avglinear = movmean2d(avglinear, 3, 139, '') 
-                    else:
-                        avglinear = movmean2d(avglinear, 3, 5, '') 
+                    
+                    avglinear = movmean2d(avglinear, 3, 17, '') 
 
-                    avg_rangeFFT_db = 20*np.log10(abs(avglinear))
+                    avg_rangeFFT_db = 10*np.log10(abs(avglinear))
                     
                     #Reset window
                     avglinear = np.array([])
-                
+                    M, N = avg_rangeFFT_db.shape
+                    range_measurements = np.full(N, np.nan)
+                    fixed_threshold_map = np.zeros((M, N))
+                    fixed_mask = np.zeros((M, N))
+
                     nFrames  = len(avg_rangeFFT_db[0,:])
                     
                     rangeindex=np.linspace(0, nFrames-1, nFrames).astype(int)
 
                     start_index = i-nFrames+1
                     for k in rangeindex:
-                        peakBin= np.argmax(avg_rangeFFT_db[:,k]) 
-                        peakVal = avg_rangeFFT_db[peakBin,k]
+                        profile = avg_rangeFFT_db[:, k]
+                        
+                        noise_floor = np.median(profile)
+                        threshold = noise_floor + Threshold_dB
+                        fixed_threshold_map[:, k] = threshold
+                        mask = profile > threshold
+                        fixed_mask[:, k] = mask
 
-                        if peakVal > np.mean( avg_rangeFFT_db[:,k] ) + Threshold_dB:
-                            range_est= range_axis_reversed[peakBin]
-                            self.radar_data_queue.put(DetectionsAtTime(timestamps[k+start_index],RADAR_DETECTION_TYPE, [range_est] )  )
+                        detected_indices = np.where(mask)[0]
+
+                        if detected_indices.size > 0:
+                            local_max_idx = np.argmax(profile[detected_indices])
+                            peakBin = detected_indices[local_max_idx]
+                            range_val = range_axis_reversed[peakBin]
+                            if range_val <= range_threshold:
+                                range_measurements[k] = range_val
+                                          
+                            #else:
+                                #print("NO DETECTION______________________________________________")
+                                #range_est[k+start_index] = 0
+                                #range_measurements[k] = 0
+                                #kalman_total.append(0)
+
+
+                    range_threshold_map = np.full_like(avg_rangeFFT_db, threshold)
+                    A = np.array([[1, ramp_time],[0, 1]])
+                    H = np.array([[1, 0]])
+                    Q = np.array([[1, 0],[0, 1e2]])
+                    R = 4
+                    P = np.eye(2) * 500
+                    x = np.array([[range_axis[0]],[0]])  # column vector
+
+                    range_est_kalman = range_measurements.copy()
+                    for k in range(N):
+                        # Prediction step
+                        x = A @ x
+                        P = A @ P @ A.T + Q
+                         
+                        # Update step (only if a measurement is available)
+                        if not np.isnan(range_measurements[k]):
+                            z = range_measurements[k]
+                            y = z - H @ x
+                            S = H @ P @ H.T + R
+                            K = P @ H.T @ np.linalg.inv(S)
+                            x = x + K @ y
+                            P = (np.eye(2) - K @ H) @ P
+                            if range_est_kalman[k] > 0:
+                                self.radar_data_queue.put(DetectionsAtTime(timestamps[k+start_index],RADAR_DETECTION_TYPE, [range_est_kalman[k]] )  )
+                            #kalman_total2.append( [timestamps[k+start_index], range_est_kalman[k] ]  )    
                         else:
-                            range_est= 0
+                            # Only update missing values
+                            range_est_kalman[k] = (H @ x).item()
+                            if range_est_kalman[k] > 0:
+                                self.radar_data_queue.put(DetectionsAtTime(timestamps[k+start_index],RADAR_DETECTION_TYPE, [range_est_kalman[k]] )  )
+                            #kalman_total2.append( [timestamps[k+start_index], range_est_kalman[k] ]  )       
+                        
+                                 
             i = i+1
 
             if self.config.record_data:
@@ -237,7 +299,9 @@ class RadarTracking():
         wavelength      = c/fc_stop  # Wavelength (m)
         d               = 0.00625     # Element spacing (m)
         Radar_trade_off_flag = 0     #For long range set it to 1, for high velocity set it to 0`
-        Threshold_dB    = 10
+        range_threshold = 85
+        Threshold_dB = 4  
+        lambda_ = c/fc_stop
         time_vector = np.linspace(1*ramp_time, len(txt_files)*ramp_time, len(txt_files))
         range_bin = c/(2*delta_f)
         range_axis   = np.linspace(0 ,range_bin*(numSamples/2-1) , int(numSamples/2))
@@ -248,6 +312,9 @@ class RadarTracking():
         i = 0  #i Represnets which frame is currently being assessed 
         timestamps = []
 
+        kalman_total = []
+        kalman_total2 = []
+
         max_rangefft1, max_rangefft2 = 0,0
 
         deltaT = pd.Timestamp.now() -pd.Timestamp.now() 
@@ -257,15 +324,19 @@ class RadarTracking():
         window_start= pd.Timestamp.now()
         window_end = window_start + time_window
         for file_name in txt_files:
-            
+            #print(i)
             t1 =  pd.Timestamp.now() 
             file_path = os.path.join(directory_to_process, file_name)
             new_td_data = read_columns(file_path)
             
             #self.process_time_domain_data(new_td_data) #Change 
             avg_fft_linear,timestamp, max_rangefft1, max_rangefft2 = self.process_radar_data(new_td_data, max_rangefft1, max_rangefft2)
-            timestamps.append(timestamp)
+            
+            timestamps.append(timestamp)  
+            #timestamps.append(pd.Timestamp.now())
        
+            avg_fft_linear = avg_fft_linear*avg_fft_linear
+            
             if avglinear.size == 0:
                 avglinear = avg_fft_linear
             else:
@@ -274,47 +345,106 @@ class RadarTracking():
             #window_size = int(len(txt_files)/300) #Adjust window size
             window_start = pd.Timestamp.now()
             #Gather multiple frames for window
-            if(window_start> window_end): #or i == len(txt_files)-1 
+            window_size = int(60) #len(txt_files) 
+            
+            if(i%window_size== window_size-1): #or i == len(txt_files)-1 
                 window_end = window_start + time_window
                 if avglinear.size > numSamples:
                     
-                    if Radar_trade_off_flag:
-                        avglinear = movmean2d(avglinear, 3, 139, '') 
-                    else:
-                        avglinear = movmean2d(avglinear, 3, 5, '') 
+                     
+                    avglinear = movmean2d(avglinear, 3, 17, '') 
 
-                    avg_rangeFFT_db = 20*np.log10(abs(avglinear))
+                    avg_rangeFFT_db = 10*np.log10(abs(avglinear))
                     
+
                     #Reset window
                     avglinear = np.array([])
-                
+                    M, N = avg_rangeFFT_db.shape
+                    range_measurements = np.full(N, np.nan)
+                    fixed_threshold_map = np.zeros((M, N))
+                    fixed_mask = np.zeros((M, N))
+
                     nFrames  = len(avg_rangeFFT_db[0,:])
                     
                     rangeindex=np.linspace(0, nFrames-1, nFrames).astype(int)
 
                     start_index = i-nFrames+1
                     for k in rangeindex:
-                        peakBin= np.argmax(avg_rangeFFT_db[:,k]) 
-                        peakVal = avg_rangeFFT_db[peakBin,k]
+                        profile = avg_rangeFFT_db[:, k]
+                        
+                        noise_floor = np.median(profile)
+                        threshold = noise_floor + Threshold_dB
+                        fixed_threshold_map[:, k] = threshold
+                        mask = profile > threshold
+                        fixed_mask[:, k] = mask
 
-                        if peakVal > np.mean( avg_rangeFFT_db[:,k] ) + Threshold_dB:
-                            range_est[k+start_index] = range_axis_reversed[peakBin]
+                        detected_indices = np.where(mask)[0]
+
+                        if detected_indices.size > 0:
+                            local_max_idx = np.argmax(profile[detected_indices])
+                            peakBin = detected_indices[local_max_idx]
+                            range_val = range_axis_reversed[peakBin]
+                            if range_val <= range_threshold:
+                                range_measurements[k] = range_val
+                                range_est[k+start_index] = range_axis_reversed[peakBin]
+                                #kalman_total.append(range_val)           
+                            else:
+                                range_est[k+start_index] = 0
+                                #range_measurements[k] = 0
+                                #kalman_total.append(0)
                             
-                            self.radar_data_queue.put(DetectionsAtTime(timestamps[k+start_index],RADAR_DETECTION_TYPE, [range_est[k+start_index]] )  )
+                    range_threshold_map = np.full_like(avg_rangeFFT_db, threshold)
+                    A = np.array([[1, ramp_time],[0, 1]])
+                    H = np.array([[1, 0]])
+                    Q = np.array([[1, 0],[0, 1e2]])
+                    R = 4
+                    P = np.eye(2) * 500
+                    x = np.array([[range_axis[0]],[0]])  # column vector
+
+                    range_est_kalman = range_measurements.copy()  # Reverse the order for Kalman filter
+                    for k in range(N):
+                        # Prediction step
+                        x = A @ x
+                        P = A @ P @ A.T + Q
+                         
+                        # Update step (only if a measurement is available)
+                        if not np.isnan(range_measurements[k]):
+                            z = range_measurements[k]
+                            y = z - H @ x
+                            S = H @ P @ H.T + R
+                            K = P @ H.T @ np.linalg.inv(S)
+                            x = x + K @ y
+                            P = (np.eye(2) - K @ H) @ P
+                            if range_est_kalman[k] > 0:
+                                self.radar_data_queue.put(DetectionsAtTime(timestamps[k+start_index],RADAR_DETECTION_TYPE, [range_est_kalman[k]] )  )
+                                #kalman_total2.append( [timestamps[k+start_index], range_est_kalman[k] ]  )    
                         else:
-                            range_est[k+start_index] = 0
-                            #self.radar_data_queue.put([timestamps[k+start_index], range_est[k+start_index],k+start_index ])
+                            # Only update missing values
+                            range_est_kalman[k] = (H @ x).item()
+                            if range_est_kalman[k] > 0:
+                                self.radar_data_queue.put(DetectionsAtTime(timestamps[k+start_index],RADAR_DETECTION_TYPE, [range_est_kalman[k]] )  )
+                                #kalman_total2.append( [timestamps[k+start_index], range_est_kalman[k] ]  )  
+                                  
+                             
+                     
+                          
+                         
             i = i+1
             t2 =  pd.Timestamp.now() 
             
+
             delta = t2 - t1
             #print("timestamps")
             #print(delta)
             deltaT = delta+ deltaT
+            
+            
 
-            time.sleep(0.001) # Change back 0.08
+            time.sleep(0.017) # Change back 0.08
         print("All data from folder is done")
         
+
+
     def process_time_domain_data(self, td_data):
         # Add the raw TD record to the radar window
         self.radar_window.add_raw_record(td_data)
