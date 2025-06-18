@@ -134,7 +134,16 @@ def save_frame_async(image, filename):
     threading.Thread(target=worker, daemon=True).start()
 
 # ------------------------------ track_objects ------------------------------
-def track_objects(stop_event, video_config: VideoConfiguration, start_time: pd.Timestamp, data_queue: mp.Queue = None):
+from multiprocessing.managers import ListProxy
+
+def track_objects(stop_event,
+                  video_config: VideoConfiguration,
+                  start_time: pd.Timestamp,
+                  data_queue: mp.Queue = None,
+                  shared_buffers: dict[str, dict[str, ListProxy | int]] = None):
+    """
+    Track objects using YOLO detection algorithm.
+    """
     ### PARAMs to the program
     model_weights = video_config.modelWeights
     save_raw_img = video_config.saveRawImages
@@ -179,6 +188,13 @@ def track_objects(stop_event, video_config: VideoConfiguration, start_time: pd.T
                 break
 
         results = model.track(frame, persist=True, conf=confidence_threshold, iou=iou_threshold, verbose=False)
+
+        buf = shared_buffers["image"]["data"]
+        buf.append((time.time(), {"frame": frame}))
+        if len(buf) > shared_buffers["image"]["maxlength"]:
+            buf.pop(0)
+
+
         for i, result in enumerate(results):
             # If configured, saved the original image to disk, in the <output_folder>/raw/*
             if save_raw_img:

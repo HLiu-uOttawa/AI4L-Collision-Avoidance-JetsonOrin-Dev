@@ -22,14 +22,17 @@ from radar.dataparsing.td_textdata_parser import read_columns
 from radar.radarprocessing.get_td_sensor_data import get_td_data_voltage
 from radar.radarprocessing.radar_processing_functions import movmean2d, compensatePathloss_dB, Clutter_rejection
 
+from multiprocessing.managers import ListProxy
 class RadarTracking():
     def __init__(self, 
                  radar_configuration: RadarConfiguration,
                  start_time: pd.Timestamp = pd.Timestamp.now(),
-                 radar_data_queue: mp.Queue = None):
+                 radar_data_queue: mp.Queue = None,
+                 shared_buffers: dict[str, dict[str, ListProxy | int]] = None):
         
         self.config = radar_configuration
         self.radar_data_queue = radar_data_queue
+        self.shared_buffers = shared_buffers
         self.start_time = start_time
         # output directory will be the given folder, with a timestamp and 'radar' appended to it
         self.output_dir = os.path.join(self.config.output_path, self.start_time.strftime('%Y-%m-%d_%H-%M-%S'), 'radar')
@@ -166,6 +169,12 @@ class RadarTracking():
 
         while not stop_event.is_set():
             voltage_data = get_td_data_voltage(self.radar_module)
+
+            buf = self.shared_buffers["radar"]["data"]
+            buf.append((voltage_data.timestamp, {"frame": voltage_data.td_data}))
+            if len(buf) > self.shared_buffers["radar"]["maxlength"]:
+                buf.pop(0)
+
             if voltage_data is None:
                 # There was likely an error - reset error code, try again
                 self.radar_module.error = False

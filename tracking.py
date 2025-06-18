@@ -29,9 +29,105 @@ import multiprocessing as mp
 import queue
 from datetime import datetime, timedelta
 
+import multiprocessing as mp
+import time
+from typing import Any, Dict, List, Tuple
 
-def radar_tracking_task(stop_event, config: RadarConfiguration, start_time: pd.Timestamp, radar_data_queue: mp.Queue):
-    radar_tracking = RadarTracking(config, start_time, radar_data_queue)
+
+class MultiSensorBuffer:
+    """
+    A shared memory buffer to store multiple sensor types (images, radar frames, IMU, GPS),
+    each with its own independent rolling time window.
+
+    This class can only work on Linux-like os
+    """
+
+    def __init__(self, time_window_sec: float = 1.3):
+        self.time_window = time_window_sec
+        self._manager = mp.Manager()
+
+        self.buffers = {
+            "image": self._manager.list(),
+            "radar": self._manager.list(),
+            "imu":   self._manager.list(),
+            "gps":   self._manager.list(),
+        }  # type: Dict[str, Any]
+
+    def append(self, sensor_type: str, data: Any) -> None:
+        """
+        Append data to the buffer of a specific sensor type.
+
+        Args:
+            sensor_type (str): One of 'image', 'radar', 'imu', 'gps'.
+            data (Any): The sensor data (with implicit current timestamp).
+        """
+        if sensor_type not in self.buffers:
+            raise ValueError(f"Invalid sensor type: {sensor_type}")
+
+        timestamp = time.time()
+        self.buffers[sensor_type].append((timestamp, data))
+        self._trim_old(sensor_type, timestamp)
+
+    def get_latest(self, sensor_type: str) -> List[Tuple[float, Any]]:
+        """
+        Retrieve the current valid data in buffer for a sensor type.
+
+        Args:
+            sensor_type (str): One of 'image', 'radar', 'imu', 'gps'.
+
+        Returns:
+            List[Tuple[float, Any]]: List of (timestamp, data) within the time window.
+        """
+        if sensor_type not in self.buffers:
+            raise ValueError(f"Invalid sensor type: {sensor_type}")
+        return list(self.buffers[sensor_type])
+
+    def _trim_old(self, sensor_type: str, current_time: float) -> None:
+        """
+        Trim outdated data from buffer based on the time window.
+
+        Args:
+            sensor_type (str): Sensor type buffer to trim.
+            current_time (float): Current timestamp.
+        """
+        buffer = self.buffers[sensor_type]
+        cutoff = current_time - self.time_window
+        while len(buffer) > 0 and buffer[0][0] < cutoff:
+            buffer.pop(0)
+
+
+# Image buffer for 1.3 seconds (@10 FPS)
+# Radar buffer for 1.3 seconds (@25 Hz)
+# IMU buffer for 1.3 seconds (@200 Hz)
+# GPS buffer for 1.3 seconds (@5 Hz)
+
+
+def rawdata_buffer_task(stop_event, buffers):
+    while not stop_event.is_set():
+        now = time.time()
+        # buffers["image"].append((now, {"frame": f"img@{now}"}))
+        # buffers["radar"].append((now, {"radar": f"r@{now}"}))
+        # buffers["imu"].append((now, {"imu": [0.1, 0.2, 9.8]}))
+        # buffers["gps"].append((now, {"lat": 45.42, "lon": -75.69}))
+        print(f"Image info in buffers... length: {len(buffers['image']['data'])}")
+        print(f"Radar info in buffers... length: {len(buffers['radar']['data'])}")
+        # print(buffers['image'])
+        # print(buffers['image'])
+
+        # if len(buffers[key]) > MAX_LEN[key]:
+        #     buffers[key].pop(0)
+
+        time.sleep(0.1)
+
+
+from multiprocessing.managers import ListProxy
+
+def radar_tracking_task(stop_event,
+                        config: RadarConfiguration,
+                        start_time: pd.Timestamp,
+                        radar_data_queue: mp.Queue,
+                        shared_buffers: dict[str, dict[str, ListProxy | int]] = None):
+    radar_tracking = RadarTracking(config, start_time, radar_data_queue, shared_buffers)
     radar_tracking.object_tracking(stop_event)
 
 
@@ -293,6 +389,15 @@ if __name__ == '__main__':
     gps_current_data = manager.Namespace()
     gps_current_data.cur = None
 
+    # Create a thread to save raw data in shared memory within a time window. 1.3 s
+    from utils.buffer_utils import  create_sensor_buffers
+
+    shared_buffers = create_sensor_buffers(manager)
+    rawdata_buffer_proc = mp.Process(name="Raw Data Coll.",
+                              target=rawdata_buffer_task,
+                              args=(stop_event, shared_buffers)
+                              )
+    rawdata_buffer_proc.start()
     # Generate a IMU Processing
     if not args.skip_imu:
         print("Process imu and save data...")
@@ -325,7 +430,7 @@ if __name__ == '__main__':
         image_data_queue = mp.Queue()
         with torch.no_grad():
             video_proc = mp.Process(name="Video Data Coll.", target=track_objects,
-                                    args=(stop_event, video_config, start_time, image_data_queue))
+                                    args=(stop_event, video_config, start_time, image_data_queue, shared_buffers))
             video_proc.start()
 
             # Create the radar tracking configuration, process, queue to move data if not disabled
@@ -338,7 +443,7 @@ if __name__ == '__main__':
 
         radar_data_queue = mp.Queue()
         radar_proc = mp.Process(name="Radar Data Coll.", target=radar_tracking_task,
-                                args=(stop_event, radar_config, start_time, radar_data_queue))
+                                args=(stop_event, radar_config, start_time, radar_data_queue, shared_buffers))
         radar_proc.start()
 
     # Create the object tracking configuration, process, queue to move data
@@ -351,16 +456,15 @@ if __name__ == '__main__':
         tracker = get_object_tracking_gm_phd(start_time, tracking_config)
 
         # Queue process to handle incoming data
-        tracking_proc = mp.Process(
-            name="Tracking",
-            target=process_queues,
-            args=(stop_event,
-                  tracker,
-                  image_data_queue,
-                  radar_data_queue,
-                  imu_status,
-                  gps_current_data,
-                  args.batching_time))
+        tracking_proc = mp.Process(name="Tracking",
+                                   target=process_queues,
+                                   args=(stop_event,
+                                          tracker,
+                                          image_data_queue,
+                                          radar_data_queue,
+                                          imu_status,
+                                          gps_current_data,
+                                          args.batching_time))
         tracking_proc.start()
 
     try:
