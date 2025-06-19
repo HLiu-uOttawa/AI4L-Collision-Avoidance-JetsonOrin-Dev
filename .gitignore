@@ -1,7 +1,9 @@
+
 .venv
 .idea
 #data
 output
+data/Experiment_A/
 
 imu/imu_data/imu_data.tmp
 gps/gps_data/gps_data.tmp
