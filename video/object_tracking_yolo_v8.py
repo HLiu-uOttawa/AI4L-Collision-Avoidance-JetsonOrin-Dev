@@ -18,7 +18,6 @@ import cv2
 from pyzbar.pyzbar import decode
 import cv2
 
-
 def read_qrcode_from_image(np_image):
     # Ensure the image is either grayscale or color.
     decoded_objects = decode(np_image)
@@ -26,7 +25,6 @@ def read_qrcode_from_image(np_image):
         data = obj.data.decode("utf-8")
         return data  # Return the content of the first QR code.
     return None
-
 
 def extract_timestamp_from_filename(filename):
     """
@@ -119,12 +117,10 @@ def detection_from_bbox(yolo_box, detected_object, camera_details: CameraDetails
                             polar_range_data)  # DetectionDetails(detected_object, [x, 0.2, y, 0.2]) #TODO Return Detect details on camera
 
 
-
 # ------------------------------ Async image saving ------------------------------
 def save_frame_async(image, filename):
     """
     Asynchronously save a PIL Image to disk without blocking the main thread.
-
     Args:
         image (PIL.Image.Image): The image to save.
         filename (str): The target file path for saving the image.
@@ -132,10 +128,8 @@ def save_frame_async(image, filename):
     def worker():
         image.save(filename)
     threading.Thread(target=worker, daemon=True).start()
-
 # ------------------------------ track_objects ------------------------------
 from multiprocessing.managers import ListProxy
-
 def track_objects(stop_event,
                   video_config: VideoConfiguration,
                   start_time: pd.Timestamp,
@@ -144,7 +138,6 @@ def track_objects(stop_event,
     """
     Track objects using YOLO detection algorithm.
     """
-    ### PARAMs to the program
     model_weights = video_config.modelWeights
     save_raw_img = video_config.saveRawImages
     save_detection_video = video_config.saveProcessedVideo
@@ -167,7 +160,7 @@ def track_objects(stop_event,
 
     output_folder = setup_output_folders(output_directory, save_raw_img, start_time)
 
-    model = YOLO(model_weights).to('cuda')
+    model = YOLO(model_weights) #.to('cuda')
     print(f"Opening video Source: {source}")
 
     cap = cv2.VideoCapture(source)
@@ -176,6 +169,7 @@ def track_objects(stop_event,
         return
 
     is_camera = str(source).isdigit() or str(source).startswith("/dev/video")
+    k=0
     while not stop_event.is_set():
         ret, frame = cap.read()
         if not ret:
@@ -187,29 +181,57 @@ def track_objects(stop_event,
                 print("Video playback ended.")
                 break
 
-        results = model.track(frame, persist=True, conf=confidence_threshold, iou=iou_threshold, verbose=False)
+        # print(f"Got frame at {datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]}")
+        # time.sleep(0.1)
 
+        height, width, channels = frame.shape
+        # print(f"Got frame at {datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]}, size: {width}x{height}, channels: {channels}")
+
+        results = model.track(frame, persist=True, conf=confidence_threshold, iou=iou_threshold, verbose=False)
         buf = shared_buffers["image"]["data"]
         buf.append((time.time(), {"frame": frame}))
         if len(buf) > shared_buffers["image"]["maxlength"]:
             buf.pop(0)
 
+        #Checks if source is a video file and if so, extracts the timestamps from the filenames
+        if is_camera == False:
+            directory_to_process = os.path.dirname(source) + "/image"
+            files = os.listdir(directory_to_process)        
+            jpeg_files = [f for f in files if f.endswith('.jpg')]
+            img_timestamp = []
+            
+            for file_name in jpeg_files:
+                file_path = os.path.join(directory_to_process, file_name)
+                d = extract_timestamp_from_filename(file_path)
+                img_timestamp.append(d)
 
         for i, result in enumerate(results):
             # If configured, saved the original image to disk, in the <output_folder>/raw/*
             if save_raw_img:
                 orig_img_rgb = Image.fromarray(result.orig_img[..., ::-1])  # Convert BGR to RGB
 
+                # Modified by Brian on Mar 20, 2025,
                 timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S.%f")[:-3]
+                # if is_camera:
+                #     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S.%f")[:-3]
+                # else:
+                #     timestamp = img_timestamp[i]
                 filename = os.path.join(output_folder, "raw", f"frame_{i:05d}_{timestamp}.png")
                 save_frame_async(orig_img_rgb, filename)
+                # orig_img_rgb.save(os.path.join(output_folder, "raw", f"image_{i}_{orig_img_w}x{orig_img_h}.jpg"))
 
-            detection_timestamp = datetime.now().replace(microsecond=0)
+            if is_camera:
+                detection_timestamp= datetime.now().replace(microsecond=0)
+            else:
+                #print(f"Processing image {k} at {img_timestamp[k]}")
+                detection_timestamp= img_timestamp[k] 
+                k += 1
+
             detections = []
 
             # Iterate over the detected objects, add tracking details into the detections_data list
             for box in result.boxes:
-                classification_index = box.cls[0].item()
+                classification_index= box.cls[0].item()
                 detected_object = result.names[classification_index]
                 # print(f"Object: {detected_object}, Confidence { box.conf[0].item()}")
 
@@ -226,6 +248,7 @@ def track_objects(stop_event,
 
     # ------------------------------------------------------------------------------------------------
     # model.add_callback("on_predict_batch_end", on_predict_batch_end)
+
     # results = model.track(source=source,
     #                       conf=confidence_threshold,
     #                       iou=iou_threshold,
