@@ -287,8 +287,8 @@ def process_queues(stop_event,
                     # tracker.update_tracks(combined_detections, combined_timestamp, type="combined") #TODO Implement update tracks
                 
                 #Offline only: stores radar detections in the radar buffer to ensure synchronization with image data 
-                for i in range(len(radar_detections_in_window)):
-                    radar_buffer.append(radar_detections_in_window[i])
+                #for i in range(len(radar_detections_in_window)):
+                    #radar_buffer.append(radar_detections_in_window[i])
                 
                 # Add the code from Sina to communicate with server
                 # import socket
