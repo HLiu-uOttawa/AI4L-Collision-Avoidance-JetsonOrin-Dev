@@ -139,6 +139,7 @@ def process_queues(stop_event,
                    gps_current_data,
                    batching_time=1):
     count = 1
+    batching_time=.3
     last_print_time = datetime.now()
     last_remove_tracks_time = datetime.now()
     time_window = timedelta(seconds=batching_time)  # Define the window
@@ -158,7 +159,8 @@ def process_queues(stop_event,
     # Upload data fusion to output folder
     detect_output_file_path = os.path.join("output/", detect_output_file_name)
     radar_timestamps = []
-
+    image_detections_in_window = []
+    radar_detections_in_window = []
     while not stop_event.is_set():
 
         # uncomment below code to test the info from imu and gps threads
@@ -166,14 +168,13 @@ def process_queues(stop_event,
         # print(f"In process_queue: {gps_current_data.cur}")
 
         processed_anything = False
-        image_detections_in_window = []
-        radar_detections_in_window = []
+
 
         # Define a batch time window for collecting data
         if last_batch_time is None:
             last_batch_time = datetime.now()
-
-        batch_window_end = last_batch_time + time_window  # Set the upper limit for the current batch window
+            batch_window_end = last_batch_time + time_window  # Set the upper limit for the current batch
+         
 
         # Fetch all image data within the batch window
         try:
@@ -234,108 +235,113 @@ def process_queues(stop_event,
         except queue.Empty:
             pass
 
-        # Process both image and radar data if available within the time window
-        if image_detections_in_window and radar_detections_in_window:
-            # print("Data Fusion detected_________________________________________")
-
-            img_time = image_detections_in_window[-1].timestamp
-            print("Nearest date from camera list :" + str(img_time))
-            i = 0
-            timestamps = []
-            while i < len(radar_detections_in_window):
-                timestamps.append(radar_detections_in_window[i].timestamp)
-                i = i + 1
-
-            # Obtain closest timestamps between radar and camera
-            cloz_dict = {
-                abs(img_time - date): date
-                for date in timestamps}
-            res = cloz_dict[min(cloz_dict.keys())]
-            print("Nearest date from radar list : " + str(res))
-            combination_index = timestamps.index(res)
-            
-            time_diff =  img_time - radar_detections_in_window[combination_index].timestamp 
-            print("Time difference:" + str(time_diff.total_seconds()))
-            if abs(time_diff.total_seconds()) > 1:
-                print("Time difference is too large, skipping data fusion")
-            else:
-                combined_timestamp = max(
-                    image_detections_in_window[-1].timestamp, radar_detections_in_window[-1].timestamp
-                )
-                combined_detections = (
-                        [img_time] + [radar_detections_in_window[combination_index].timestamp]  + image_detections_in_window[-1].detections[0].get_data() + radar_detections_in_window[ combination_index].detections
-                        
-                )
-                print("data fusion___________________________________________________________")
-                 
-                detect_output.append(combined_detections)
-
-                np.savetxt(detect_output_file_path, detect_output, delimiter=",", fmt='% s')
-
-            #Offline only
-            # radar_buffer_length = len(radar_detections_in_window)
-            # i = 0
-            # while i< radar_buffer_length:
-            #     radar_buffer.append(radar_detections_in_window[i]) 
-            #     i = i+1
-
-            # Add the code from Sina to communicate with server
-            # import socket
-            # import json
-            #
-            # HOST = 'localhost'
-            # PORT = 65432
-            #
-            # with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            #     s.connect((HOST, PORT))
-            #     message = {"collision": 1}
-            #     s.sendall(json.dumps(message).encode())
-            #
-            #     data = s.recv(1024)
-            #     response = json.loads(data.decode())
-            #     print("Server Response:", response)
-
-
-            #
-
-            # vb = np.array([r*np.cos(visEl[k])*np.cos(visAz[k]),
-            #         r*np.cos(visEl[k])*np.sin(visAz[k]),
-            #        r*np.sin(visEl[k])])
-
-            # print(radar_detections_in_window[-1] )
-            # print(image_detections_in_window[-1] )
-            # tracker.update_tracks(combined_detections, combined_timestamp, type="combined") #TODO Implement update tracks
-
-        elif image_detections_in_window:
-            image_timestamp = image_detections_in_window[-1].timestamp
-            image_detections = image_detections_in_window[-1].detections
-
-
-            # tracker.update_tracks(image_detections, image_timestamp, type="image_only")
-
-        elif radar_detections_in_window:
-            
-            radar_timestamp = radar_detections_in_window[-1].timestamp
-            radar_detections = radar_detections_in_window[-1].detections
-            radar_buffer_length = len(radar_detections_in_window)
-            i = 0
-            while i< radar_buffer_length:
-                radar_buffer.append(radar_detections_in_window[i]) 
-                i = i+1
-            # tracker.update_tracks([radar_detections], radar_timestamp, type="radar_only")
-             
-        else:
-            last_batch_time = datetime.now()  # Set the start of the next batch window
-
-            time.sleep(0.01)  # Small sleep to avoid busy waiting
-            continue
-
-        count += 1
         current_time = datetime.now()
-        last_batch_time = current_time  # Set the start of the next batch window
+
+        if batch_window_end < current_time:
+            last_batch_time = current_time  # Set the start of the next batch window
+            batch_window_end = last_batch_time + time_window  # Set the upper limit for the current batch windo
+
+            # Process both image and radar data if available within the time window
+            if image_detections_in_window and radar_detections_in_window:
+                # print("Data Fusion detected_________________________________________")
+
+                img_time = image_detections_in_window[-1].timestamp
+                print("Nearest date from camera list :" + str(img_time))
+                i = 0
+                timestamps = []
+                for i in range(len(radar_detections_in_window)):
+                    timestamps.append(radar_detections_in_window[i].timestamp)
+
+                # Obtain closest timestamps between radar and camera
+                cloz_dict = {
+                    abs(img_time - date): date
+                    for date in timestamps}
+                res = cloz_dict[min(cloz_dict.keys())]
+                print("Nearest date from radar list : " + str(res))
+                combination_index = timestamps.index(res)
+                
+                time_diff =  img_time - radar_detections_in_window[combination_index].timestamp 
+                print("Time difference:" + str(time_diff.total_seconds()))
+                if abs(time_diff.total_seconds()) > 1:
+                    print("Time difference is too large, skipping data fusion")
+                else:
+                    combined_timestamp = max(
+                        img_time, radar_detections_in_window[combination_index].timestamp
+                    )
+                    save_detections = (
+                            [img_time] + [radar_detections_in_window[combination_index].timestamp]  + image_detections_in_window[-1].detections[0].get_data() + radar_detections_in_window[ combination_index].detections
+                            
+                    )
+                    print("data fusion___________________________________________________________")
+                    
+                    detect_output.append(save_detections)
+                    combined_detections = [radar_detections_in_window[combination_index], image_detections_in_window[-1] ]
+                    
+                    combined_timestamp = max(
+                        img_time, radar_detections_in_window[combination_index].timestamp
+                    )
+                    
+                    np.savetxt(detect_output_file_path, detect_output, delimiter=",", fmt='% s')
+
+                    #tracker.update_tracks(combined_detections, combined_timestamp, type="combined", print_coord = True)
+                    # tracker.update_tracks(combined_detections, combined_timestamp, type="combined") #TODO Implement update tracks
+                
+                #Offline only: stores radar detections in the radar buffer to ensure synchronization with image data 
+                for i in range(len(radar_detections_in_window)):
+                    radar_buffer.append(radar_detections_in_window[i])
+                
+                # Add the code from Sina to communicate with server
+                # import socket
+                # import json
+                #
+                # HOST = 'localhost'
+                # PORT = 65432
+                #
+                # with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                #     s.connect((HOST, PORT))
+                #     message = {"collision": 1}
+                #     s.sendall(json.dumps(message).encode())
+                #
+                #     data = s.recv(1024)
+                #     response = json.loads(data.decode())
+                #     print("Server Response:", response)
+
+        
+            elif image_detections_in_window:
+                #print("Image data detected_________________________________________")
+                image_timestamp = image_detections_in_window[-1].timestamp
+                image_detections = image_detections_in_window[-1].detections
+
+                # tracker.update_tracks(image_detections, image_timestamp, type="image_only")
+                
+
+            elif radar_detections_in_window:
+                #print("Radar data detected_________________________________________")
+                radar_timestamp = radar_detections_in_window[-1].timestamp
+                radar_detections = radar_detections_in_window[-1].detections
+                radar_buffer_length = len(radar_detections_in_window)
+
+    
+                for i in range(len(radar_detections_in_window)):
+                    radar_buffer.append(radar_detections_in_window[i]) 
+       
+                # tracker.update_tracks([radar_detections], radar_timestamp, type="radar_only")
+                
+            else:
+                last_batch_time = datetime.now()  # Set the start of the next batch window
+
+                time.sleep(0.01)  # Small sleep to avoid busy waiting
+                continue
+
+            #Reset detections for the next window
+            image_detections_in_window = []
+            radar_detections_in_window = []
+            count += 1  
+        
+        current_time = datetime.now()
         # Print current tracks approx every 5 seconds
         if (current_time - last_print_time).total_seconds() >= 5:
-
+             
             remove = False
             interval = batching_time * 2
             # Print current tracks with remove_tracks=True every 30 seconds, this will remove tracks that are not being updated
