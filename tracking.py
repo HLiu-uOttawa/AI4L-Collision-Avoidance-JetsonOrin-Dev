@@ -7,6 +7,9 @@ import os
 # import cv2
 import csv
 from datetime import datetime, timedelta
+from collections import deque
+from datetime import datetime, timedelta
+from multiprocessing.managers import ListProxy
 
 from video.VideoConfiguration import VideoConfiguration
 from tracking.TrackingConfiguration import TrackingConfiguration
@@ -32,6 +35,7 @@ from datetime import datetime, timedelta
 import multiprocessing as mp
 import time
 from typing import Any, Dict, List, Tuple
+import socket, json  # added for communication to server by socket
 
 
 class MultiSensorBuffer:
@@ -49,8 +53,8 @@ class MultiSensorBuffer:
         self.buffers = {
             "image": self._manager.list(),
             "radar": self._manager.list(),
-            "imu":   self._manager.list(),
-            "gps":   self._manager.list(),
+            "imu": self._manager.list(),
+            "gps": self._manager.list(),
         }  # type: Dict[str, Any]
 
     def append(self, sensor_type: str, data: Any) -> None:
@@ -109,10 +113,8 @@ def rawdata_buffer_task(stop_event, buffers):
         # buffers["radar"].append((now, {"radar": f"r@{now}"}))
         # buffers["imu"].append((now, {"imu": [0.1, 0.2, 9.8]}))
         # buffers["gps"].append((now, {"lat": 45.42, "lon": -75.69}))
-
-        #print(f"Image info in buffers... length: {len(buffers['image']['data'])}")
-        #print(f"Radar info in buffers... length: {len(buffers['radar']['data'])}")
-        
+        # print(f"Image info in buffers... length: {len(buffers['image']['data'])}")
+        # print(f"Radar info in buffers... length: {len(buffers['radar']['data'])}")
         # print(buffers['image'])
         # print(buffers['image'])
 
@@ -122,8 +124,54 @@ def rawdata_buffer_task(stop_event, buffers):
         time.sleep(0.1)
 
 
-from multiprocessing.managers import ListProxy
+#  -------------------------------------------------------------------------------  #
+detection_history = deque()
+avoidance_flag_sent = {2: False, 1: False}
+detection_window_seconds = 1.0  # Time window in seconds, 1 s by default
 
+def check_and_send_avoidance_flag(current_time):
+    global detection_history, avoidance_flag_sent
+
+    # Add the current detection timestamp
+    detection_history.append(current_time)
+
+    # Remove outdated timestamps outside the time window
+    while detection_history and (current_time - detection_history[0]).total_seconds() > detection_window_seconds:
+        detection_history.popleft()
+
+    count = len(detection_history)
+
+    # Trigger level 2 avoidance if 2 detections occur within the time window
+    if count == 2 and not avoidance_flag_sent[2]:
+        print("[!] Triggering Level 2 Avoidance")
+        sent_avoidance_flag(level=2)
+        avoidance_flag_sent[2] = True
+        return 2
+
+    # Trigger level 1 avoidance if 3 or more detections occur within the time window
+    if count >= 3 and not avoidance_flag_sent[1]:
+        print("[!!!] Triggering Level 1 Avoidance")
+        sent_avoidance_flag(level=1)
+        avoidance_flag_sent[1] = True
+        return 1
+
+#  -------------------------------------------------------------------------------  #
+def sent_avoidance_flag(ip: str = '127.0.0.1', port: int = 65432, level=2) -> None:
+
+    HOST = 'localhost'
+    PORT = port
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.connect((HOST, PORT))
+            message = {"collision": level}
+            s.sendall(json.dumps(message).encode())
+            data = s.recv(1024)
+            response = json.loads(data.decode())
+            print("Server Response:", response)
+    except (ConnectionRefusedError, json.JSONDecodeError, socket.error) as e:
+        print(f"[Error] Communication failed: {e}")
+
+#  -------------------------------------------------------------------------------
 def radar_tracking_task(stop_event,
                         config: RadarConfiguration,
                         start_time: pd.Timestamp,
@@ -141,22 +189,22 @@ def process_queues(stop_event,
                    gps_current_data,
                    batching_time=1):
     count = 1
-    batching_time=.2
+    batching_time = .3
     last_print_time = datetime.now()
     last_remove_tracks_time = datetime.now()
     time_window = timedelta(seconds=batching_time)  # Define the window
     max_wait_time = 0.14  # Wax wait time to check data in the queue (just less than half the batching time)
 
     last_batch_time = None
-
+    
     offline_flag = True  # Set to True if you want to run the script in offline mode, change to be place better
 
     # Buffers to store data for the next processing loop
     image_buffer = []
     radar_buffer = []
 
-
-    detect_output = [['timestamp_image', 'timestamp_radar', 'azimuth', 'elevation', 'distance_camera', 'distance_radar']]
+    detect_output = [
+        ['timestamp_image', 'timestamp_radar', 'azimuth', 'elevation', 'distance_camera', 'distance_radar']]
     detect_timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")[:-3]
     detect_output_file_name = "detect_data_" + detect_timestamp + ".csv"
 
@@ -166,19 +214,16 @@ def process_queues(stop_event,
     image_detections_in_window = []
     radar_detections_in_window = []
     while not stop_event.is_set():
-
         # uncomment below code to test the info from imu and gps threads
         # print(f"In process_queue: {imu_status}")
         # print(f"In process_queue: {gps_current_data.cur}")
 
         processed_anything = False
 
-
         # Define a batch time window for collecting data
         if last_batch_time is None:
             last_batch_time = datetime.now()
             batch_window_end = last_batch_time + time_window  # Set the upper limit for the current batch
-         
 
         # Fetch all image data within the batch window
         try:
