@@ -197,10 +197,10 @@ def track_objects(stop_event,
         if is_camera == False:
             directory_to_process = os.path.dirname(source) + "/image"
             files = os.listdir(directory_to_process)        
-            jpeg_files = [f for f in files if f.endswith('.jpg')]
+            pic_files = [f for f in files if f.endswith(('.png', '.jpg', '.jpeg'))]
             img_timestamp = []
             
-            for file_name in jpeg_files:
+            for file_name in pic_files:
                 file_path = os.path.join(directory_to_process, file_name)
                 d = extract_timestamp_from_filename(file_path)
                 img_timestamp.append(d)
