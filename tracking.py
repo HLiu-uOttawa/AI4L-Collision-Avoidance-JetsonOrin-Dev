@@ -129,31 +129,79 @@ detection_history = deque()
 avoidance_flag_sent = {2: False, 1: False}
 detection_window_seconds = 1.0  # Time window in seconds, 1 s by default
 
-def check_and_send_avoidance_flag(current_time):
+def check_and_send_avoidance_flag(current_time: datetime) -> int:
+    """
+    Checks for detections at the current time point and triggers appropriate avoidance levels
+    based on historical records and the defined time window.
+
+    Core Logic:
+    1. Maintain a history queue of active detections within the specified time window.
+    2. If 2 detections occur within the current 1-second window, trigger Level 2 avoidance
+       and immediately clear the history queue.
+    3. Subsequently, if 2 detections accumulate again within a new 1-second window
+       (after Level 2 triggered and cleared the queue), trigger Level 1 avoidance.
+
+    Args:
+        current_time: The timestamp of the current detection (must be a datetime object).
+
+    Returns:
+        int: Returns 2 if Level 2 is triggered, 1 if Level 1 is triggered;
+             Returns 0 if no avoidance level is triggered.
+    """
     global detection_history, avoidance_flag_sent
 
-    # Add the current detection timestamp
+    # 1. Add the current detection timestamp to the end of the queue.
     detection_history.append(current_time)
 
-    # Remove outdated timestamps outside the time window
-    while detection_history and (current_time - detection_history[0]).total_seconds() > detection_window_seconds:
-        detection_history.popleft()
+    # 2. Remove outdated timestamps that fall outside the current time window.
+    # This loop ensures that the detection_history queue only contains detection records
+    # that are within the detection_window_seconds range relative to the current_time.
+    while detection_history and \
+          (current_time - detection_history[0]).total_seconds() > detection_window_seconds:
+        detection_history.popleft() # Remove the oldest element from the front of the queue
 
-    count = len(detection_history)
+    # 3. Calculate the number of valid detections within the current time window.
+    current_detection_count = len(detection_history)
 
-    # Trigger level 2 avoidance if 2 detections occur within the time window
-    if count == 2 and not avoidance_flag_sent[2]:
-        print("[!] Triggering Level 2 Avoidance")
-        sent_avoidance_flag(level=2)
-        avoidance_flag_sent[2] = True
-        return 2
+    # --- Trigger Level 2 Avoidance ---
+    # Level 2 will be triggered only if all the following conditions are met:
+    #   - There are exactly 2 detections within the current 1-second window (current_detection_count == 2).
+    #   - The Level 2 avoidance flag has not been sent yet (not avoidance_flag_sent[2]), to prevent re-triggering.
+    if current_detection_count == 2 and not avoidance_flag_sent[2]:
+        print(f"[!] Triggering Level 2 Avoidance at {current_time.strftime('%Y-%m-%d %H:%M:%S.%f')}")
+        sent_avoidance_flag(level=2) # Call the function to send the avoidance flag
+        avoidance_flag_sent[2] = True # Mark Level 2 as sent, to prevent further triggers
 
-    # Trigger level 1 avoidance if 3 or more detections occur within the time window
-    if count >= 3 and not avoidance_flag_sent[1]:
-        print("[!!!] Triggering Level 1 Avoidance")
-        sent_avoidance_flag(level=1)
-        avoidance_flag_sent[1] = True
-        return 1
+        # **Core logic: Immediately clear the history queue after Level 2 is triggered.**
+        # This is to "reset" the count and provide a clean context for Level 1 triggering.
+        detection_history.clear()
+        # print("    -> detection_history cleared after Level 2 trigger.")
+
+        # **Important: Reset the Level 1 sent status.**
+        # This allows Level 1 to be triggered in a new counting cycle after Level 2 has been triggered and the queue cleared.
+        avoidance_flag_sent[1] = False
+        return 2 # Return the triggered level
+
+    # --- Trigger Level 1 Avoidance ---
+    # Level 1 will be triggered only if all the following conditions are met:
+    #   - Level 2 avoidance has already been triggered (avoidance_flag_sent[2] is True).
+    #     This ensures that Level 1 is an "escalation" event that occurs after Level 2.
+    #   - After Level 2 was triggered and the queue cleared, 2 detections accumulate again
+    #     within the current new 1-second window (current_detection_count == 2).
+    #   - The Level 1 avoidance flag has not been sent yet (not avoidance_flag_sent[1]), to prevent re-triggering.
+    if avoidance_flag_sent[2] and \
+       current_detection_count == 2 and \
+       not avoidance_flag_sent[1]:
+        print(f"[!!!] Triggering Level 1 Avoidance at {current_time.strftime('%Y-%m-%d %H:%M:%S.%f')}")
+        sent_avoidance_flag(level=1) # Call the function to send the avoidance flag
+        avoidance_flag_sent[1] = True # Mark Level 1 as sent
+        # Depending on requirements, you might also choose to clear the queue after Level 1 is triggered.
+        # If you want to completely "reset" the system or prevent further cascading triggers after Level 1, uncomment the line below:
+        # detection_history.clear()
+        return 1 # Return the triggered level
+
+    # If none of the above conditions are met, no avoidance level is triggered
+    return 0
 
 #  -------------------------------------------------------------------------------  #
 def sent_avoidance_flag(ip: str = '127.0.0.1', port: int = 65432, level=2) -> None:
@@ -197,7 +245,7 @@ def process_queues(stop_event,
 
     last_batch_time = None
     
-    offline_flag = True  # Set to True if you want to run the script in offline mode, change to be place better
+    offline_flag = False  # Set to True if you want to run the script in offline mode, change to be place better
 
     # Buffers to store data for the next processing loop
     image_buffer = []
@@ -338,6 +386,8 @@ def process_queues(stop_event,
                                 image_buffer.append(image_detections_in_window[i])
                     else:
                         print("data fusion___________________________________________________________")
+
+                    check_and_send_avoidance_flag(datetime.now())
 
                     combined_timestamp = max(
                         img_time, radar_detections_in_window[combination_index].timestamp
