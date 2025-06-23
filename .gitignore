@@ -3,6 +3,8 @@
 .idea
 #data
 output
+!output/README.md
+
 data/Experiment_A/
 
 imu/imu_data/imu_data.tmp
@@ -186,5 +188,3 @@ video/*.jpg
 video/*.yaml
 
 # Ignore all data samples used for testing, and output folder from that testing
-#data/
-output/
