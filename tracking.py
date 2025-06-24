@@ -245,14 +245,14 @@ def process_queues(stop_event,
 
     last_batch_time = None
     
-    offline_flag = False  # Set to True if you want to run the script in offline mode, change to be place better
+    offline_flag = False # Set to True if you want to run the script in offline mode, change to be place better
 
     # Buffers to store data for the next processing loop
     image_buffer = []
     radar_buffer = []
 
     detect_output = [
-        ['timestamp_image', 'timestamp_radar', 'azimuth', 'elevation', 'distance_camera', 'distance_radar']]
+        ['timestamp_image', 'timestamp_radar', 'azimuth', 'elevation', 'distance_camera', 'distance_radar', 'avoidance_flag']]
     detect_timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")[:-3]
     detect_output_file_name = "detect_data_" + detect_timestamp + ".csv"
 
@@ -387,13 +387,17 @@ def process_queues(stop_event,
                     else:
                         print("data fusion___________________________________________________________")
 
-                    check_and_send_avoidance_flag(datetime.now())
+                    avoidance_flag = check_and_send_avoidance_flag(datetime.now())
+
+                    
 
                     combined_timestamp = max(
                         img_time, radar_detections_in_window[combination_index].timestamp
                     )
                     save_detections = (
-                            [img_time] + [radar_detections_in_window[combination_index].timestamp]  + img_data.detections[0].get_data() + radar_detections_in_window[ combination_index].detections
+                            [img_time] + [radar_detections_in_window[combination_index].timestamp]  
+                            + img_data.detections[0].get_data() + radar_detections_in_window[ combination_index].detections
+                            + [avoidance_flag]
                             
                     )
                     
