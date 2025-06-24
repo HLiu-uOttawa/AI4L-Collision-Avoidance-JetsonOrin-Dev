@@ -270,13 +270,15 @@ class NRCArduCopter:
                 # print(f"[ALT] reached {alt_now:.1f} m / {target_alt_m:.1f} m")
                 logger.info(f"[ALT] Reached {alt_now:.1f} m / {target_alt_m:.1f} m")
                 break
-            print(f"[ALT] {alt_now:.1f} m / {target_alt_m:.1f} m")
+            # print(f"[ALT] {alt_now:.1f} m / {target_alt_m:.1f} m")
+            logger.info(f"[ALT] {alt_now:.1f} m / {target_alt_m:.1f} m")
             break
             time.sleep(0.2)
 
     def land(self):
         """Sends a LAND command and waits until disarmed."""
-        print("[LAND] initiating landing…")
+        # print("[LAND] initiating landing…")
+        logger.info("[LAND] initiating landing…")
         self.master.mav.command_long_send(
             self.master.target_system, self.master.target_component,
             mavutil.mavlink.MAV_CMD_NAV_LAND,
@@ -285,13 +287,15 @@ class NRCArduCopter:
         # wait until disarmed
         while True:
             if not self.master.motors_armed():
-                print("[LAND] motors disarmed")
+                # print("[LAND] motors disarmed")
+                logger.info("[LAND] motors disarmed")
                 break
             time.sleep(0.5)
 
     def rtl(self):
         """Sends an RTL (Return to Launch) command and waits until disarmed."""
-        print("[RTL] returning to launch…")
+        # print("[RTL] returning to launch…")
+        logger.info("[RTL] returning to launch…")
         self.master.mav.command_long_send(
             self.master.target_system, self.master.target_component,
             mavutil.mavlink.MAV_CMD_NAV_RETURN_TO_LAUNCH,
@@ -300,7 +304,8 @@ class NRCArduCopter:
         # wait until disarmed
         while True:
             if not self.master.motors_armed():
-                print("[RTL] completed; motors disarmed")
+                # print("[RTL] completed; motors disarmed")
+                logger.info("[RTL] completed; motors disarmed")
                 break
             time.sleep(0.5)
 
@@ -347,7 +352,8 @@ class NRCArduCopter:
         yaw_now = self.get_yaw() or 0.0
         yaw_cmd = math.radians(yaw_now)
 
-        print(f"[INTERRUPT] climbing to {INTERRUPT_ALT:.1f} m AGL")
+        # print(f"[INTERRUPT] climbing to {INTERRUPT_ALT:.1f} m AGL")
+        logger.info(f"[INTERRUPT] climbing to {INTERRUPT_ALT:.1f} m AGL")
         while True:
             if self._last_global is None:
                 time.sleep(0.1)
@@ -355,7 +361,8 @@ class NRCArduCopter:
             _, _, alt_now = self._last_global
             dz = INTERRUPT_ALT - alt_now
             if abs(dz) <= 1.0:
-                print(f"[INTERRUPT COMPLETE] {alt_now:.1f} m")
+                # print(f"[INTERRUPT COMPLETE] {alt_now:.1f} m")
+                logger.info(f"[INTERRUPT COMPLETE] {alt_now:.1f} m")
                 break
 
             vz_cmd = -1.0 if dz > 0 else 1.0  # negative vz = climb
@@ -392,7 +399,8 @@ class NRCArduCopter:
 
         final_target_alt = self._override_alt if self._override_alt else tgt_alt
 
-        print(f"[GOTO] Going to lat={tgt_lat:.6f}, lon={tgt_lon:.6f}, alt={final_target_alt:.1f} m")
+        # print(f"[GOTO] Going to lat={tgt_lat:.6f}, lon={tgt_lon:.6f}, alt={final_target_alt:.1f} m")
+        logger.info(f"[GOTO] Going to lat={tgt_lat:.6f}, lon={tgt_lon:.6f}, alt={final_target_alt:.1f} m")
 
         while self._last_global is None or self._last_attitude is None:
             time.sleep(0.1)
@@ -446,7 +454,8 @@ class NRCArduCopter:
             dist_3d = math.hypot(dist_h, dz)
 
             if dist_3d < threshold:
-                print("[GOTO] Waypoint reached")
+                # print("[GOTO] Waypoint reached")
+                logger.info("[GOTO] Waypoint reached")
                 break
 
             bearing_rad = math.atan2(
@@ -484,8 +493,9 @@ class NRCArduCopter:
                 yaw_cmd, 0
             )
 
-            print(
-                f"[GOTO] pos=({lat_now:.6f},{lon_now:.6f},{alt_now:.1f})m | vel=({vn:.1f},{ve:.1f})m/s | yaw={math.degrees(yaw_cmd):.1f}°")
+            # print(
+            #     f"[GOTO] pos=({lat_now:.6f},{lon_now:.6f},{alt_now:.1f})m | vel=({vn:.1f},{ve:.1f})m/s | yaw={math.degrees(yaw_cmd):.1f}°")
+            logger.info(f"[GOTO] pos=({lat_now:.6f},{lon_now:.6f},{alt_now:.1f})m | vel=({vn:.1f},{ve:.1f})m/s | yaw={math.degrees(yaw_cmd):.1f}°")
             time.sleep(0.1)
 
     # ──────────────────────────────────────────────────────────────────────────
@@ -520,4 +530,5 @@ if __name__ == "__main__":
     cop.land()
     cop.stop()
 
-    print("[NRC] mission complete.")
+    # print("[NRC] mission complete.")
+    logger.info("[NRC] mission complete.")
