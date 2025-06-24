@@ -18,6 +18,7 @@ import cv2
 from pyzbar.pyzbar import decode
 import cv2
 
+
 def read_qrcode_from_image(np_image):
     # Ensure the image is either grayscale or color.
     decoded_objects = decode(np_image)
@@ -25,6 +26,7 @@ def read_qrcode_from_image(np_image):
         data = obj.data.decode("utf-8")
         return data  # Return the content of the first QR code.
     return None
+
 
 def extract_timestamp_from_filename(filename):
     """
@@ -125,11 +127,17 @@ def save_frame_async(image, filename):
         image (PIL.Image.Image): The image to save.
         filename (str): The target file path for saving the image.
     """
+
     def worker():
         image.save(filename)
+
     threading.Thread(target=worker, daemon=True).start()
+
+
 # ------------------------------ track_objects ------------------------------
 from multiprocessing.managers import ListProxy
+
+
 def track_objects(stop_event,
                   video_config: VideoConfiguration,
                   start_time: pd.Timestamp,
@@ -160,7 +168,7 @@ def track_objects(stop_event,
 
     output_folder = setup_output_folders(output_directory, save_raw_img, start_time)
 
-    model = YOLO(model_weights) #.to('cuda')
+    model = YOLO(model_weights)  # .to('cuda')
     print(f"Opening video Source: {source}")
 
     cap = cv2.VideoCapture(source)
@@ -169,7 +177,7 @@ def track_objects(stop_event,
         return
 
     is_camera = str(source).isdigit() or str(source).startswith("/dev/video")
-    k=0
+    k = 0
     while not stop_event.is_set():
         ret, frame = cap.read()
         if not ret:
@@ -193,17 +201,31 @@ def track_objects(stop_event,
         if len(buf) > shared_buffers["image"]["maxlength"]:
             buf.pop(0)
 
-        #Checks if source is a video file and if so, extracts the timestamps from the filenames
+        # Checks if source is a video file and if so, extracts the timestamps from the filenames
         if is_camera == False:
             directory_to_process = os.path.dirname(source) + "/image"
-            files = os.listdir(directory_to_process)        
+            files = os.listdir(directory_to_process)
             pic_files = [f for f in files if f.endswith(('.png', '.jpg', '.jpeg'))]
             img_timestamp = []
-            
+
             for file_name in pic_files:
                 file_path = os.path.join(directory_to_process, file_name)
                 d = extract_timestamp_from_filename(file_path)
                 img_timestamp.append(d)
+
+        # Save binding box information to files
+        bb_info_dir = os.path.join(output_folder, "bb_info")
+        os.makedirs(bb_info_dir, exist_ok=True)
+        bb_filename = os.path.join(bb_info_dir, f"detections_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S.%f')[:-3]}.txt")
+        with open(bb_filename, 'w') as f:
+            for result in results:
+                # Assuming det has .class_name, .confidence, .bbox (x, y, w, h)
+                for box in result.boxes:
+                    classification_index = box.cls[0].item()
+                    detected_object = result.names[classification_index]
+                    print(f"detected_object: {detected_object}")
+                    bbox = box.xyxy[0].tolist()
+                    f.write(f"{detected_object} {bbox[0]:.1f} {bbox[1]:.1f} {bbox[2]:.1f} {bbox[3]:.1f}\n")
 
         for i, result in enumerate(results):
             # If configured, saved the original image to disk, in the <output_folder>/raw/*
@@ -221,17 +243,17 @@ def track_objects(stop_event,
                 # orig_img_rgb.save(os.path.join(output_folder, "raw", f"image_{i}_{orig_img_w}x{orig_img_h}.jpg"))
 
             if is_camera:
-                detection_timestamp= datetime.now().replace(microsecond=0)
+                detection_timestamp = datetime.now().replace(microsecond=0)
             else:
-                #print(f"Processing image {k} at {img_timestamp[k]}")
-                detection_timestamp= img_timestamp[k] 
+                # print(f"Processing image {k} at {img_timestamp[k]}")
+                detection_timestamp = img_timestamp[k]
                 k += 1
 
             detections = []
 
             # Iterate over the detected objects, add tracking details into the detections_data list
             for box in result.boxes:
-                classification_index= box.cls[0].item()
+                classification_index = box.cls[0].item()
                 detected_object = result.names[classification_index]
                 # print(f"Object: {detected_object}, Confidence { box.conf[0].item()}")
 

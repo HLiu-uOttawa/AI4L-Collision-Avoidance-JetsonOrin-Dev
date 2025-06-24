@@ -31,23 +31,47 @@ import threading
 import math
 import time
 from pymavlink import mavutil
+import os, logging
+
+LOG_DIR = "logs"
+LOG_FILE = os.path.join(LOG_DIR, "nrc_ardu_copter.log")
+LOG_LEVEL = logging.INFO
+os.makedirs(LOG_DIR, exist_ok=True)
+
+logger = logging.getLogger(__name__)
+logger.setLevel(LOG_LEVEL)
+
+file_handler = logging.FileHandler(LOG_FILE)
+file_handler.setLevel(LOG_LEVEL)
+
+console_handler = logging.StreamHandler()
+console_handler.setLevel(LOG_LEVEL)
+
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+file_handler.setFormatter(formatter)
+console_handler.setFormatter(formatter)
+
+logger.addHandler(file_handler)
+logger.addHandler(console_handler)
 
 HOST = 'localhost'
 PORT = 65432
 INTERRUPT_ALT = 75.0  # m AGL climb target when collision=1
-REDUCED_SPEED = 1.0   # <-- NEW: Reduced horizontal speed (m/s) after collision:2
+REDUCED_SPEED = 1.0  # <-- NEW: Reduced horizontal speed (m/s) after collision:2
+
 
 class NRCArduCopter:
     def __init__(self, connection_str="udp:127.0.0.1:14551"):
         # Connect & wait for heartbeat
         self.master = mavutil.mavlink_connection(connection_str)
-        print("[NRC] waiting for heartbeat…")
-        
+        # print("[NRC] waiting for heartbeat…")
+        logger.info("[NRC] waiting for heartbeat…")
 
         # add timestamp and all of print out to logging....
 
         self.master.wait_heartbeat()
-        print(f"[NRC] connected (sysid={self.master.target_system})")
+        # print(f"[NRC] connected (sysid={self.master.target_system})")
+        logger.info(f"[NRC] connected (sysid={self.master.target_system})")
 
         # By default, hold heading on mission
         self.master.mav.param_set_send(
@@ -60,24 +84,24 @@ class NRCArduCopter:
 
         # Mask for LOCAL_NED that ignores position/accel but uses vx,vy,vz,yaw
         self.MASK_LOCAL_NED = (
-            mavutil.mavlink.POSITION_TARGET_TYPEMASK_X_IGNORE    |
-            mavutil.mavlink.POSITION_TARGET_TYPEMASK_Y_IGNORE    |
-            mavutil.mavlink.POSITION_TARGET_TYPEMASK_Z_IGNORE    |
-            mavutil.mavlink.POSITION_TARGET_TYPEMASK_AX_IGNORE   |
-            mavutil.mavlink.POSITION_TARGET_TYPEMASK_AY_IGNORE   |
-            mavutil.mavlink.POSITION_TARGET_TYPEMASK_AZ_IGNORE   |
-            mavutil.mavlink.POSITION_TARGET_TYPEMASK_YAW_RATE_IGNORE
+                mavutil.mavlink.POSITION_TARGET_TYPEMASK_X_IGNORE |
+                mavutil.mavlink.POSITION_TARGET_TYPEMASK_Y_IGNORE |
+                mavutil.mavlink.POSITION_TARGET_TYPEMASK_Z_IGNORE |
+                mavutil.mavlink.POSITION_TARGET_TYPEMASK_AX_IGNORE |
+                mavutil.mavlink.POSITION_TARGET_TYPEMASK_AY_IGNORE |
+                mavutil.mavlink.POSITION_TARGET_TYPEMASK_AZ_IGNORE |
+                mavutil.mavlink.POSITION_TARGET_TYPEMASK_YAW_RATE_IGNORE
         )
 
         # Placeholder for the most recent position/attitude
-        self._last_global = None    # (lat, lon, rel_alt)
+        self._last_global = None  # (lat, lon, rel_alt)
         self._last_attitude = None  # (roll, pitch, yaw_rad)
 
         # Collision-interrupt flags
         self._collision_flag = False
         self._reduced_speed_flag = False  # Initialize reduced speed flag
 
-        self._override_alt = None   # once set to INTERRUPT_ALT, all future waypoints use this
+        self._override_alt = None  # once set to INTERRUPT_ALT, all future waypoints use this
 
         # Start incoming-message listener thread to keep self._last_global and _last_attitude fresh
         self._stop_reader = False
@@ -136,16 +160,19 @@ class NRCArduCopter:
         Accept multiple client connections.
         Each client is handled in a separate thread.
         """
+
         def handle_client(conn, addr):
             with conn:
-                print(f"[SOCKET] Connected by {addr}")
+                # print(f"[SOCKET] Connected by {addr}")
+                logger.info(f"[SOCKET] Connected by {addr}")
                 while not self._stop_socket:
                     try:
                         data = conn.recv(1024)
                         if not data:
                             break
                         received = json.loads(data.decode())
-                        print("[SOCKET] Received:", received)
+                        # print("[SOCKET] Received:", received)
+                        logger.info(f"[SOCKET] Received from {addr}: {received}")
 
                         if received.get("collision") == 1:
                             self._collision_flag = True
@@ -155,25 +182,28 @@ class NRCArduCopter:
                         elif received.get("collision") == 2:
                             self._reduced_speed_flag = True
                             resp = {"message": "collision (speed reduction) received", "status": "success"}
-                            print("[SOCKET] Speed reduction triggered. Setting reduced speed flag.")
-
+                            # print("[SOCKET] Speed reduction triggered. Setting reduced speed flag.")
+                            logger.info("[SOCKET] Speed reduction triggered. Setting reduced speed flag.")
                         else:
                             resp = {"message": "unrecognized command", "status": "ok"}
 
                     except json.JSONDecodeError:
                         resp = {"message": "invalid json", "status": "error"}
                     except Exception as e:
-                        print(f"[SOCKET] Error: {e}")
+                        # print(f"[SOCKET] Error: {e}")
+                        logger.exception(f"[SOCKET] Error: {e}")
                         break
 
                     conn.sendall(json.dumps(resp).encode())
-            print(f"[SOCKET] Client {addr} disconnected.")
+            # print(f"[SOCKET] Client {addr} disconnected.")
+            logger.info(f"[SOCKET] Client {addr} disconnected.")
 
         # Server socket
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             s.bind((HOST, PORT))
             s.listen()
-            print(f"[SOCKET] Server listening on {HOST}:{PORT}")
+            # print(f"[SOCKET] Server listening on {HOST}:{PORT}")
+            logger.info(f"[SOCKET] Server listening on {HOST}:{PORT}")
             while not self._stop_socket:
                 try:
                     s.settimeout(1.0)  # allow for graceful shutdown
@@ -209,16 +239,21 @@ class NRCArduCopter:
             time.sleep(0.1)
         self._home_lat, self._home_lon, _ = self._last_global
 
-        print("[ARM] arming motors…")
+        # print("[ARM] arming motors…")
+        logger.info("[ARM] Arming motors…")
+
         self.master.mav.command_long_send(
             self.master.target_system, self.master.target_component,
             mavutil.mavlink.MAV_CMD_COMPONENT_ARM_DISARM,
             0, 1, 0, 0, 0, 0, 0, 0,
         )
         self.master.motors_armed_wait()
-        print("[ARM] motors armed")
+        # print("[ARM] motors armed")
+        logger.info("[ARM] Motors armed.")
 
-        print(f"[TAKEOFF] climbing to {target_alt_m:.1f} m AGL")
+        # print(f"[TAKEOFF] climbing to {target_alt_m:.1f} m AGL")
+        logger.info(f"[TAKEOFF] Climbing to {target_alt_m:.1f} m AGL")
+
         self.master.mav.command_long_send(
             self.master.target_system, self.master.target_component,
             mavutil.mavlink.MAV_CMD_NAV_TAKEOFF,
@@ -232,9 +267,11 @@ class NRCArduCopter:
                 continue
             _, _, alt_now = self._last_global
             if abs(alt_now - target_alt_m) < 1.0:
-                print(f"[ALT] reached {alt_now:.1f} m / {target_alt_m:.1f} m")
+                # print(f"[ALT] reached {alt_now:.1f} m / {target_alt_m:.1f} m")
+                logger.info(f"[ALT] Reached {alt_now:.1f} m / {target_alt_m:.1f} m")
                 break
             print(f"[ALT] {alt_now:.1f} m / {target_alt_m:.1f} m")
+            break
             time.sleep(0.2)
 
     def land(self):
@@ -329,10 +366,10 @@ class NRCArduCopter:
                 self.master.target_component,
                 mavutil.mavlink.MAV_FRAME_LOCAL_NED,
                 self.MASK_LOCAL_NED,
-                0, 0, 0,          # ignore pos
-                0, 0, vz_cmd,     # vertical speed
-                0, 0, 0,          # ignore accel
-                yaw_cmd, 0        # yaw, yaw_rate=0
+                0, 0, 0,  # ignore pos
+                0, 0, vz_cmd,  # vertical speed
+                0, 0, 0,  # ignore accel
+                yaw_cmd, 0  # yaw, yaw_rate=0
             )
             time.sleep(0.1)
 
@@ -447,9 +484,9 @@ class NRCArduCopter:
                 yaw_cmd, 0
             )
 
-            print(f"[GOTO] pos=({lat_now:.6f},{lon_now:.6f},{alt_now:.1f})m | vel=({vn:.1f},{ve:.1f})m/s | yaw={math.degrees(yaw_cmd):.1f}°")
+            print(
+                f"[GOTO] pos=({lat_now:.6f},{lon_now:.6f},{alt_now:.1f})m | vel=({vn:.1f},{ve:.1f})m/s | yaw={math.degrees(yaw_cmd):.1f}°")
             time.sleep(0.1)
-
 
     # ──────────────────────────────────────────────────────────────────────────
 
