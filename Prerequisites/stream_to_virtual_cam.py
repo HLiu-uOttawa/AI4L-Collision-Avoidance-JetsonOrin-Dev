@@ -105,7 +105,7 @@ def frame_handler(cam: Camera, stream: Stream, frame: Frame):
     full_timestamp = f"{timestamp}.{ms:03d}"
 
     # Paste QRCode！
-    np_image = add_qrcode_to_image(np_image, full_timestamp, qr_size=60)
+    # np_image = add_qrcode_to_image(np_image, full_timestamp, qr_size=60)
 
 
     # Initialize virtual webcam
