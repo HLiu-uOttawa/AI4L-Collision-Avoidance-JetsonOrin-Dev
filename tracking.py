@@ -252,7 +252,7 @@ def process_queues(stop_event,
     radar_buffer = []
 
     detect_output = [
-        ['timestamp_image', 'timestamp_radar', 'azimuth', 'elevation', 'distance_camera', 'distance_radar', 'avoidance_flag']]
+        ['timestamp_image', 'timestamp_radar', 'azimuth', 'elevation', 'distance_camera', 'distance_radar', 'SNR', 'avoidance_flag']]
     detect_timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")[:-3]
     detect_output_file_name = "detect_data_" + detect_timestamp + ".csv"
 
@@ -342,16 +342,18 @@ def process_queues(stop_event,
             if image_detections_in_window and radar_detections_in_window:
                 # print("Data Fusion detected_________________________________________")
                 if offline_flag:
+                    #If offline mode, we will use the first image detection in the window
                     img_time = image_detections_in_window[0].timestamp
                     img_data = image_detections_in_window[0]
                     
                     
                 else:
+                    # Get the lastest image detection in the window
                     img_time = image_detections_in_window[-1].timestamp
                     img_data = image_detections_in_window[-1]
 
                 print("Nearest date from camera list :" + str(img_time))
-                i = 0
+                
                 timestamps = []
                 for i in range(len(radar_detections_in_window)):
                     timestamps.append(radar_detections_in_window[i].timestamp)
@@ -365,11 +367,14 @@ def process_queues(stop_event,
                 print("Nearest date from radar list : " + str(res))
                 combination_index = timestamps.index(res)
                 
-                time_diff =  img_time - radar_detections_in_window[combination_index].timestamp 
+                time_diff = img_time - radar_detections_in_window[combination_index].timestamp 
                 print("Time difference:" + str(time_diff.total_seconds()))
                 if abs(time_diff.total_seconds()) > 1:
                     print("Time difference is too large, skipping data fusion")
+
                     if offline_flag:
+                        # If offline mode, check if the last image detection is after the last radar detection
+                        #If so, pop out first image detection as it does not have matching the radar detection
                         if radar_detections_in_window[-1].timestamp > img_time:
                             if len(image_detections_in_window) > 1:
                                 for i in range(1,  len(image_detections_in_window)):  
@@ -396,11 +401,10 @@ def process_queues(stop_event,
                     )
                     save_detections = (
                             [img_time] + [radar_detections_in_window[combination_index].timestamp]  
-                            + img_data.detections[0].get_data() + radar_detections_in_window[ combination_index].detections
-                            + [avoidance_flag]
+                            + img_data.detections[0].get_data() + [ radar_detections_in_window[ combination_index].detections[0] ]
+                            + [ radar_detections_in_window[ combination_index].detections[1] ] + [avoidance_flag]
                             
                     )
-                    
                     
                     detect_output.append(save_detections)
                     combined_detections = [radar_detections_in_window[combination_index], img_data ]
