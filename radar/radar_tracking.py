@@ -258,22 +258,17 @@ class RadarTracking():
                             K = P @ H.T @ np.linalg.inv(S)
                             x = x + K @ y
                             P = (np.eye(2) - K @ H) @ P
-
-                            range_measurements[k] = (H @ x).item()
-                            if range_measurements[k] > 0:
-                                self.radar_data_queue.put(DetectionsAtTime(timestamps[k+start_index],RADAR_DETECTION_TYPE, [range_measurements[k]] )  )
                                 
                         else:
                             # Only update missing values
                             range_measurements[k] = (H @ x).item()
-                            if range_measurements[k] > 0:
-                                self.radar_data_queue.put(DetectionsAtTime(timestamps[k+start_index],RADAR_DETECTION_TYPE, [range_measurements[k]] )  )
+
                         interp_func = interp1d(range_axis, profile, kind='linear', bounds_error=False, fill_value=-60)
                                 
-                        # Then, for a specific k:
                         zval = interp_func(range_measurements[k])
- 
-                        SNR_vector[k] = zval - noise_floor           
+                        SNR_vector[k] = zval - noise_floor 
+                        if range_measurements[k] > 0:
+                            self.radar_data_queue.put(DetectionsAtTime(timestamps[k+start_index],RADAR_DETECTION_TYPE, [range_measurements[k], SNR_vector[k]] ) )           
                         
                                  
             i = i+1
@@ -426,22 +421,22 @@ class RadarTracking():
                             x = x + K @ y
                             P = (np.eye(2) - K @ H) @ P
 
-                            range_measurements[k] = (H @ x).item()
-                            if range_measurements[k] > 0:
-                                self.radar_data_queue.put(DetectionsAtTime(timestamps[k+start_index],RADAR_DETECTION_TYPE, [range_measurements[k]] )  )
+                            #range_measurements[k] = (H @ x).item()
+                            
                                 #kalman_total2.append( [timestamps[k+start_index], range_measurements[k] ]  )           
                         else:
                             # Only update missing values
                             range_measurements[k] = (H @ x).item()
-                            if range_measurements[k] > 0:
-                                self.radar_data_queue.put(DetectionsAtTime(timestamps[k+start_index],RADAR_DETECTION_TYPE, [range_measurements[k]] )  )
+                            
                                 #kalman_total2.append( [timestamps[k+start_index], range_measurements[k] ]  )  
                         interp_func = interp1d(range_axis, profile, kind='linear', bounds_error=False, fill_value=-60)
-                                
-                        # Then, for a specific k:
+
                         zval = interp_func(range_measurements[k])
  
                         SNR_vector[k] = zval - noise_floor 
+
+                        if range_measurements[k] > 0:
+                            self.radar_data_queue.put(DetectionsAtTime(timestamps[k+start_index],RADAR_DETECTION_TYPE, [range_measurements[k], SNR_vector[k]] ) )
                         kalman_total2.append( [timestamps[k+start_index], range_measurements[k], SNR_vector[k]]  )  
                         #print(f"SNR_vector value at k={k}: {SNR_vector[k]}")
                                 
