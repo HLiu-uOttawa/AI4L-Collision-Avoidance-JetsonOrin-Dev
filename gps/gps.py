@@ -10,15 +10,18 @@ class GPS:
     def __init__(self, config_path):
         self.load_config(config_path)
         self.serial_connection = None
-
     def load_config(self, config_path):
         """Load configuration from a YAML file."""
         try:
             with open(config_path, 'r') as config_file:
                 config = yaml.safe_load(config_file)
-                self.port = config.get("port")  # Allow port to be None initially
+                self.vid = str(config.get("vid", "")).lower()
+                self.pid = str(config.get("pid", "")).lower()
+
                 self.baud_rate = config.get("baud_rate", 115200)
                 self.timeout = config.get("timeout", 1)
+                self.port = self.auto_select_port_by_vid()
+
         except (FileNotFoundError, yaml.YAMLError) as e:
             print(f"Error loading config file: {e}")
             # Set default values if config fails
@@ -31,7 +34,7 @@ class GPS:
         ports = serial.tools.list_ports.comports()
         return [port.device for port in ports]
 
-    def auto_select_port(self):
+    def auto_select_port_by_char(self):
         """Automatically select the GPS port."""
         available_ports = self.list_ports()
         print("Available ports:", available_ports)
@@ -43,19 +46,31 @@ class GPS:
                     line = ser.readline().decode('ascii', errors='ignore').strip()
                     if line.startswith("$GPGGA") or line.startswith("$GPRMC"):
                         print(f"GPS detected on port: {port}")
-                        self.port = port
                         return
             except (serial.SerialException, UnicodeDecodeError):
                 continue
 
         print("No GPS device found.")
 
+    def auto_select_port_by_vid(self):
+        ports = serial.tools.list_ports.comports()
+        print("Available ports:")
+        for port in ports:
+            print(f"  {port.device} - VID:PID = {port.vid}:{port.pid}")
+
+            if port.vid is not None and port.pid is not None:
+                vid_hex = f"{port.vid:04x}"
+                pid_hex = f"{port.pid:04x}"
+
+                if vid_hex == str(self.vid).lower() and pid_hex == str(self.pid).lower():
+                    print(f"Matched GPS device on port: {port.device}")
+                    return port.device
+
+        print("No matching GPS device found by VID/PID.")
+        return None
+
     def connect(self):
         """Establish a connection to the GPS device."""
-        if not self.port:
-            print("No port specified. Attempting to auto-select.")
-            self.auto_select_port()
-
         if not self.port:
             print("No GPS device found. Cannot connect.")
             return
@@ -68,21 +83,21 @@ class GPS:
             self.serial_connection = None
 
     # def send_ubx_command(self, command):
-    #     """发送 UBX 命令到 GPS 模块"""
+    #     """Sent UBX command to GPS module"""
     #     if self.serial_connection.is_open:
     #         self.serial_connection.write(command)
-    #         time.sleep(0.1)  # 等待 GPS 模块处理命令
-    #         print(f"已发送 UBX 命令: {command.hex().upper()}")
+    #         time.sleep(0.1)  # Wait GPS processing command
+    #         print(f"UBX sent: {command.hex().upper()}")
     #     else:
-    #         print("错误: GPS 设备未连接")
+    #         print("Error: GPS NOT Connected")
     #
     # def enable_gpgga(self):
-    #     """启用 GPGGA ($GPGGA) 消息"""
+    #     """start GPGGA ($GPGGA) messages"""
     #     UBX_GGA_ON = bytes.fromhex("B5 62 06 01 08 00 F0 00 00 01 00 00 00 00 FF 23")
     #     self.send_ubx_command(UBX_GGA_ON)
     #
     # def disable_gprmc(self):
-    #     """禁用 GPRMC ($GPRMC) 消息"""
+    #     """disable GPRMC ($GPRMC) message"""
     #     UBX_RMC_OFF = bytes.fromhex("B5 62 06 01 08 00 F0 04 00 00 00 00 00 00 FF 2B")
     #     self.send_ubx_command(UBX_RMC_OFF)
 
@@ -126,7 +141,7 @@ class GPS:
                                         file.write("Timestamp, latitude, longitude, altitude, GpsTime\n")
 
                                 gps_current_data.cur = gps_data_line
-
+                                print(f"gps_current_data.cur {gps_data_line}")
                                 with open(file_path, 'a') as file:
                                     file.write(gps_data_line + '\n')
 
@@ -230,15 +245,16 @@ def gps_process(stop_event, gps_data_queue, gps_current_data):
     config_file_path = config_file_path = os.path.join(script_dir, "gps_config.yml")
 
     gps = GPS(config_file_path)
-
     gps.connect()
+
     # gps.set_update_rate(5)
     # gps.set_gpgga_output_rate(5)
 
-    # gps.enable_gpgga()  # 发送 GPGGA 使能命令
-    # gps.disable_gprmc()  # 关闭 GPRMC
+    # gps.enable_gpgga()  # Send GPGGA enable command
+    # gps.disable_gprmc()  # Shutdown GPRMC
 
     gps.read_data(gps_current_data)
+
     # ...
 
 
@@ -251,9 +267,14 @@ if __name__ == '__main__':
     stop_event = mp.Event()
     gps_data_queue = mp.Queue()
 
+    manager = mp.Manager()
+    gps_current_data = manager.Namespace()
+    gps_current_data.cur = None
+
     if True:
         print("Process gps and save data...")
-        gps_proc = mp.Process(name="gps_processing", target=gps_process, args=(stop_event, gps_data_queue,))
+        gps_proc = mp.Process(name="gps_processing", target=gps_process,
+                              args=(stop_event, gps_data_queue, gps_current_data, ))
         gps_proc.start()
         gps_proc.join()
 
