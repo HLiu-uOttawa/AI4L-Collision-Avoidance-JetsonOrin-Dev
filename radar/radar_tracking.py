@@ -159,6 +159,7 @@ class RadarTracking():
         avglinear = np.array([])
         #range_bin = c/(2*delta_f)
         i=0
+        last_active_frame = 0
         max_rangefft1, max_rangefft2 = 0,0
         A = np.array([[1, ramp_time],[0, 1]])
         H = np.array([[1, 0]])
@@ -263,13 +264,24 @@ class RadarTracking():
                             # Only update missing values
                             range_measurements[k] = (H @ x).item()
 
-                        interp_func = interp1d(range_axis, profile, kind='linear', bounds_error=False, fill_value=-60)
-                                
+                        interp_func = interp1d(range_axis_reversed, profile, kind='linear', bounds_error=False, fill_value=-30)
                         zval = interp_func(range_measurements[k])
-                        SNR_vector[k] = zval - noise_floor 
-                        if range_measurements[k] > 0:
-                            self.radar_data_queue.put(DetectionsAtTime(timestamps[k+start_index],RADAR_DETECTION_TYPE, [range_measurements[k], SNR_vector[k]] ) )           
-                        
+                        SNR_vector[k] = zval - noise_floor
+
+
+                        if range_measurements[k] > 0 and abs(range_measurements[k] - 57.6) > 2 and SNR_vector[k] > 3:
+                            last_active_frame = i
+                            self.radar_data_queue.put(DetectionsAtTime(timestamps[k+start_index],RADAR_DETECTION_TYPE, [range_measurements[k], SNR_vector[k]] ) )
+                        else:
+                            #Reset the kalman filter if the range measurement is not valid for long enough (about 5 seconds)
+                            if i-last_active_frame >50:
+                                A = np.array([[1, ramp_time],[0, 1]])
+                                H = np.array([[1, 0]])
+                                Q = np.array([[1, 0],[0, 1e2]])
+                                R = 4
+                                P = np.eye(2) * 500
+                                x = np.array([[range_axis[0]],[0]])  # column vector 
+                                
                                  
             i = i+1
 
@@ -314,6 +326,7 @@ class RadarTracking():
 
         avglinear = np.array([])
         i = 0  #i Represnets which frame is currently being assessed 
+        last_active_frame = 0
         timestamps = []
 
         kalman_total = []
@@ -429,15 +442,27 @@ class RadarTracking():
                             range_measurements[k] = (H @ x).item()
                             
                                 #kalman_total2.append( [timestamps[k+start_index], range_measurements[k] ]  )  
-                        interp_func = interp1d(range_axis, profile, kind='linear', bounds_error=False, fill_value=-60)
-
+                        interp_func = interp1d(range_axis_reversed, profile, kind='linear', bounds_error=False, fill_value=-30)
                         zval = interp_func(range_measurements[k])
  
                         SNR_vector[k] = zval - noise_floor 
+                        
 
-                        if range_measurements[k] > 0:
+                        if range_measurements[k] > 0 and abs(range_measurements[k] - 57.6) > 2 and SNR_vector[k] > 3:
+                            last_active_frame = i
                             self.radar_data_queue.put(DetectionsAtTime(timestamps[k+start_index],RADAR_DETECTION_TYPE, [range_measurements[k], SNR_vector[k]] ) )
-                        kalman_total2.append( [timestamps[k+start_index], range_measurements[k], SNR_vector[k]]  )  
+                            kalman_total2.append( [timestamps[k+start_index], range_measurements[k], SNR_vector[k], zval]  )  
+                        else:
+                            #Reset the kalman filter if the range measurement is not valid for long enough
+                            if i-last_active_frame >50: 
+                                A = np.array([[1, ramp_time],[0, 1]])
+                                H = np.array([[1, 0]])
+                                Q = np.array([[1, 0],[0, 1e2]])
+                                R = 4
+                                P = np.eye(2) * 500
+                                x = np.array([[range_axis[0]],[0]])  # column vector
+                                
+
                         #print(f"SNR_vector value at k={k}: {SNR_vector[k]}")
                                 
      
@@ -463,7 +488,7 @@ class RadarTracking():
         print("TOTAL Radar DELAY")
         print(deltaT)
         file_namea =  "ExpAdata_test2.csv"
-        file_nameb =  "ExpAdata_test4.csv"
+        file_nameb =  "kalman2.csv"
         file_path1 = os.path.join("data2/", file_namea)
         file_path2 = os.path.join("data2/", file_nameb)
 
