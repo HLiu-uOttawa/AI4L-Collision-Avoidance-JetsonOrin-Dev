@@ -37,7 +37,7 @@ class VideoConfiguration:
             'saveProcessedVideo': True,
             'outputDirectory': "./output",
             'videoSource': "0",
-            'confidenceThreshold': 0.3,
+            'confidenceThreshold': 0.5,
             'iouThreshold': 0.5,
             'videoStream': True,
             'showBoxesInVideo': True,
