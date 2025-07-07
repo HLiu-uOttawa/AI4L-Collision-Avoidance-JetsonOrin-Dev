@@ -149,7 +149,7 @@ class RadarTracking():
         ramp_time       = 1e-3
         numSamples = 1024
         Radar_trade_off_flag = 0     #For long range set it to 1, for high velocity set it to 0`
-        range_threshold = 85
+        range_threshold = 75
         Threshold_dB = 4 
         lambda_ = c/fc_stop
         range_bin = c/(2*delta_f)
@@ -269,7 +269,7 @@ class RadarTracking():
                         SNR_vector[k] = zval - noise_floor
 
 
-                        if range_measurements[k] > 0 and abs(range_measurements[k] - 57.6) > 2 and SNR_vector[k] > 3:
+                        if range_measurements[k] > 0 and abs(range_measurements[k] - 57.6) > 2 and SNR_vector[k] > 3.5:
                             last_active_frame = i
                             self.radar_data_queue.put(DetectionsAtTime(timestamps[k+start_index],RADAR_DETECTION_TYPE, [range_measurements[k], SNR_vector[k]] ) )
                         else:
@@ -314,8 +314,8 @@ class RadarTracking():
         MBW             = 750e6       # Clutter-rejection bandwidth
         wavelength      = c/fc_stop  # Wavelength (m)
         d               = 0.00625     # Element spacing (m)
-        Radar_trade_off_flag = 0     #For long range set it to 1, for high velocity set it to 0`
-        range_threshold = 85
+        Radar_trade_off_flag = 0     
+        range_threshold = 75
         Threshold_dB = 4  
         lambda_ = c/fc_stop
         time_vector = np.linspace(1*ramp_time, len(txt_files)*ramp_time, len(txt_files))
@@ -448,11 +448,12 @@ class RadarTracking():
                         SNR_vector[k] = zval - noise_floor 
                         
 
-                        if range_measurements[k] > 0 and abs(range_measurements[k] - 57.6) > 2 and SNR_vector[k] > 3:
+                        if range_measurements[k] > 0 and abs(range_measurements[k] - 57.6) > 2 and SNR_vector[k] > 3.5:
                             last_active_frame = i
                             self.radar_data_queue.put(DetectionsAtTime(timestamps[k+start_index],RADAR_DETECTION_TYPE, [range_measurements[k], SNR_vector[k]] ) )
-                            kalman_total2.append( [timestamps[k+start_index], range_measurements[k], SNR_vector[k], zval]  )  
+                            kalman_total2.append( [timestamps[k+start_index], range_measurements[k], SNR_vector[k]]  )  
                         else:
+                            #print("Failed at "+str(i))
                             #Reset the kalman filter if the range measurement is not valid for long enough
                             if i-last_active_frame >50: 
                                 A = np.array([[1, ramp_time],[0, 1]])
