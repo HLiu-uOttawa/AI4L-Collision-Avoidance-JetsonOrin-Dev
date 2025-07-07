@@ -223,7 +223,7 @@ def track_objects(stop_event,
                 for box in result.boxes:
                     classification_index = box.cls[0].item()
                     detected_object = result.names[classification_index]
-                    print(f"detected_object: {detected_object}")
+                    # print(f"detected_object: {detected_object}")
                     bbox = box.xyxy[0].tolist()
                     f.write(f"{detected_object} {bbox[0]:.1f} {bbox[1]:.1f} {bbox[2]:.1f} {bbox[3]:.1f}\n")
 
