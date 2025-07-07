@@ -493,7 +493,7 @@ class RadarTracking():
         file_path2 = os.path.join("data2/", file_nameb)
 
         #np.savetxt(file_path1, range_est_data, delimiter=",", fmt='% s')
-        np.savetxt(file_path2, range_est_data2, delimiter=",", fmt='% s')
+        #np.savetxt(file_path2, range_est_data2, delimiter=",", fmt='% s')
 
 
     def process_time_domain_data(self, td_data):
