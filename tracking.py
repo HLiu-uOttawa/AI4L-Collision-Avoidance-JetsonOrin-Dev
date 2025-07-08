@@ -183,7 +183,7 @@ def check_and_send_avoidance_flag(current_time: datetime) -> int:
 
         # **Important: Reset the Level 1 sent status.**
         # This allows Level 1 to be triggered in a new counting cycle after Level 2 has been triggered and the queue cleared.
-        avoidance_flag_sent[1] = False
+        #avoidance_flag_sent[1] = False
         return 2 # Return the triggered level
 
     # --- Trigger Level 1 Avoidance ---
@@ -377,6 +377,20 @@ def process_queues(stop_event,
                 
                 time_diff = img_time - radar_detections_in_window[combination_index].timestamp 
                 print("Time difference:" + str(time_diff.total_seconds()))
+
+                collision_close = any(radar_detections_in_window[i].detections[0]<40 for i in range(len(radar_detections_in_window))) 
+                if collision_close and not avoidance_flag_sent[1]:
+                     
+                    
+                    log_print("Radar below 40m, sending avoidance flag", log_file_path="logs/common.log")
+
+                    #If too many false detections, comment the lines below
+                    log_print("[!!!] Triggering Level 1 Avoidance", log_file_path="logs/common.log")
+                    sent_avoidance_flag(level=1) # Call the function to send the avoidance flag
+                    avoidance_flag_sent[1] = True # Mark Level 1 as sent
+
+
+
                 if abs(time_diff.total_seconds()) > 1:
                     print("Time difference is too large, skipping data fusion")
 
@@ -397,9 +411,10 @@ def process_queues(stop_event,
                         if len(image_detections_in_window) > 1:
                             for i in range(1,  len(image_detections_in_window)):  
                                 image_buffer.append(image_detections_in_window[i])
-                    else:
+                    #else:
                         # print("data fusion___________________")
-                        log_print("data fusion___________________", log_file_path="logs/common.log")
+                        
+                    log_print("data fusion________radar("+str(radar_detections_in_window[combination_index].detections[0])+'m)', log_file_path="logs/common.log")
 
                     avoidance_flag = check_and_send_avoidance_flag(datetime.now())
 
@@ -451,7 +466,7 @@ def process_queues(stop_event,
         
             elif image_detections_in_window:
                 # print("Image data detected___________________")
-                log_print("Image data detected___________________", log_file_path="logs/common.log")
+                log_print("Image data detected________", log_file_path="logs/common.log")
 
                 image_timestamp = image_detections_in_window[-1].timestamp
                 image_detections = image_detections_in_window[-1].detections
@@ -464,11 +479,28 @@ def process_queues(stop_event,
 
             elif radar_detections_in_window:
                 # print("Radar data detected__________________________")
-                log_print("Radar data detected______________________", log_file_path="logs/common.log")
+                log_print("Radar data detected________radar("+str(radar_detections_in_window[-1].detections[0])+'m)', log_file_path="logs/common.log")
 
                 radar_timestamp = radar_detections_in_window[-1].timestamp
                 radar_detections = radar_detections_in_window[-1].detections
                 radar_buffer_length = len(radar_detections_in_window)
+
+                  
+                 
+
+                collision_close = any(radar_detections_in_window[i].detections[0]<40 for i in range(len(radar_detections_in_window))) 
+                if collision_close and not avoidance_flag_sent[1]:
+                    log_print("Radar below 40m, sending avoidance flag", log_file_path="logs/common.log")
+
+                    #If too many false detections, comment the lines below
+                    log_print("[!!!] Triggering Level 1 Avoidance", log_file_path="logs/common.log")
+                    sent_avoidance_flag(level=1) # Call the function to send the avoidance flag
+                    avoidance_flag_sent[1] = True # Mark Level 1 as sent
+                    
+                    #log_print("Collision close detected, sending avoidance flag", log_file_path="logs/common.log")   
+                    #avoidance_flag = check_and_send_avoidance_flag(datetime.now())
+
+                 
 
                 if offline_flag:
                     for i in range(len(radar_detections_in_window)):
@@ -478,7 +510,7 @@ def process_queues(stop_event,
                 
             else:
                 last_batch_time = datetime.now()  # Set the start of the next batch window
-
+                
                 time.sleep(0.01)  # Small sleep to avoid busy waiting
                 continue
 
