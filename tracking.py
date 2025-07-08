@@ -37,6 +37,8 @@ import time
 from typing import Any, Dict, List, Tuple
 import socket, json  # added for communication to server by socket
 
+from utils.log_utils import log_print
+
 
 class MultiSensorBuffer:
     """
@@ -512,7 +514,8 @@ if __name__ == '__main__':
     parser.set_defaults(download=True)
     args = parser.parse_args()
 
-    print("Starting the tracking processes.")
+    # print("Starting the tracking processes.")
+    log_print("Starting the tracking processes.", log_file_path="logs/common.log")
 
     # Create a stop event and a queue for data to be passed between processes
     stop_event = mp.Event()
@@ -542,7 +545,8 @@ if __name__ == '__main__':
     rawdata_buffer_proc.start()
     # Generate a IMU Processing
     if not args.skip_imu:
-        print("Process imu and save data...")
+        # print("Process imu and save data...")
+        log_print("Process imu and save data...", log_file_path="logs/common.log")
         imu_data_queue = mp.Queue()
         # imu_status = mp.Manager().Namespace()
 
@@ -554,7 +558,8 @@ if __name__ == '__main__':
 
     # Generate a GPS Processing
     if not args.skip_gps:
-        print("Process gps and save data...")
+        # print("Process gps and save data...")
+        log_print("Process gps and save data...", log_file_path="logs/common.log")
         gps_data_queue = mp.Queue()
 
         gps_proc = mp.Process(
@@ -626,4 +631,5 @@ if __name__ == '__main__':
             tracking_proc.join()
 
     duration = time.time() - start_time.timestamp()
-    print(f"Tracking duration: {duration:.2f} seconds")
+    # print(f"Tracking duration: {duration:.2f} seconds")
+    log_print(f"Tracking duration: {duration:.2f} seconds", log_file_path="logs/common.log")
