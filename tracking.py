@@ -170,7 +170,9 @@ def check_and_send_avoidance_flag(current_time: datetime) -> int:
     #   - There are exactly 2 detections within the current 1-second window (current_detection_count == 2).
     #   - The Level 2 avoidance flag has not been sent yet (not avoidance_flag_sent[2]), to prevent re-triggering.
     if current_detection_count == 2 and not avoidance_flag_sent[2]:
-        print(f"[!] Triggering Level 2 Avoidance at {current_time.strftime('%Y-%m-%d %H:%M:%S.%f')}")
+        # print(f"[!] Triggering Level 2 Avoidance at {current_time.strftime('%Y-%m-%d %H:%M:%S.%f')}")
+        log_print("[!] Triggering Level 2 Avoidance", log_file_path="logs/common.log")
+        
         sent_avoidance_flag(level=2) # Call the function to send the avoidance flag
         avoidance_flag_sent[2] = True # Mark Level 2 as sent, to prevent further triggers
 
@@ -194,7 +196,9 @@ def check_and_send_avoidance_flag(current_time: datetime) -> int:
     if avoidance_flag_sent[2] and \
        current_detection_count == 2 and \
        not avoidance_flag_sent[1]:
-        print(f"[!!!] Triggering Level 1 Avoidance at {current_time.strftime('%Y-%m-%d %H:%M:%S.%f')}")
+        # print(f"[!!!] Triggering Level 1 Avoidance at {current_time.strftime('%Y-%m-%d %H:%M:%S.%f')}")
+        log_print("[!!!] Triggering Level 1 Avoidance", log_file_path="logs/common.log")
+
         sent_avoidance_flag(level=1) # Call the function to send the avoidance flag
         avoidance_flag_sent[1] = True # Mark Level 1 as sent
         # Depending on requirements, you might also choose to clear the queue after Level 1 is triggered.
@@ -217,9 +221,11 @@ def sent_avoidance_flag(ip: str = '127.0.0.1', port: int = 65432, level=2) -> No
             s.sendall(json.dumps(message).encode())
             data = s.recv(1024)
             response = json.loads(data.decode())
-            print("Server Response:", response)
+            # print("Server Response:", response)
+            log_print(f"Server Response: {response}", log_file_path="logs/common.log")
     except (ConnectionRefusedError, json.JSONDecodeError, socket.error) as e:
-        print(f"[Error] Communication failed: {e}")
+        # print(f"[Error] Communication failed: {e}")
+        log_print(f"[Error] Communication failed: {e}", log_file_path="logs/common.log")
 
 #  -------------------------------------------------------------------------------
 def radar_tracking_task(stop_event,
@@ -392,7 +398,8 @@ def process_queues(stop_event,
                             for i in range(1,  len(image_detections_in_window)):  
                                 image_buffer.append(image_detections_in_window[i])
                     else:
-                        print("data fusion___________________________________________________________")
+                        # print("data fusion___________________")
+                        log_print("data fusion___________________", log_file_path="logs/common.log")
 
                     avoidance_flag = check_and_send_avoidance_flag(datetime.now())
 
@@ -443,7 +450,9 @@ def process_queues(stop_event,
 
         
             elif image_detections_in_window:
-                print("Image data detected_________________________________________")
+                # print("Image data detected___________________")
+                log_print("Image data detected___________________", log_file_path="logs/common.log")
+
                 image_timestamp = image_detections_in_window[-1].timestamp
                 image_detections = image_detections_in_window[-1].detections
 
@@ -454,7 +463,9 @@ def process_queues(stop_event,
                 
 
             elif radar_detections_in_window:
-                print("Radar data detected_________________________________________")
+                # print("Radar data detected__________________________")
+                log_print("Radar data detected______________________", log_file_path="logs/common.log")
+
                 radar_timestamp = radar_detections_in_window[-1].timestamp
                 radar_detections = radar_detections_in_window[-1].detections
                 radar_buffer_length = len(radar_detections_in_window)
