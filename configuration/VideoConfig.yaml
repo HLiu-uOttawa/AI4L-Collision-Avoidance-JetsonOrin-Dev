@@ -3,6 +3,7 @@
 # Configuration for the Yolo Processing
 # modelWeights: "./yolov8n.pt" # If a path on disk is specified, it will not be downloaded by Yolo
 modelWeights: "./yolov8nano.pt" # If a path on disk is specified, it will not be downloaded by Yolo
+modelWeights: "./yolov8_drone_fixed_best.pt" # If a path on disk is specified, it will not be downloaded by Yolo
 
 saveRawImages: True # Determine if the raw images should be saved
 saveProcessedVideo: True
