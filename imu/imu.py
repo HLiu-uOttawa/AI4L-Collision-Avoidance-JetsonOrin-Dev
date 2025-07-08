@@ -9,6 +9,7 @@ from imu.lib.device_model import DeviceModel
 from imu.lib.data_processor.roles.jy901s_dataProcessor import JY901SDataProcessor
 from imu.lib.protocol_resolver.roles.wit_protocol_resolver import WitProtocolResolver
 
+from utils.log_utils import log_print
 
 def setConfig(device):
     """
@@ -145,7 +146,9 @@ def main(imu_status):
     endRecord()                                         # End record data
 '''
 def imu_process(stop_event, imu_data_queue, imu_status):
-    print("Starting imu process...")
+    # print("Starting imu process...")
+    log_print("Starting imu process...", log_file_path="logs/common.log")
+
 
     file_path = "./imu_data/imu_data.tmp"
 

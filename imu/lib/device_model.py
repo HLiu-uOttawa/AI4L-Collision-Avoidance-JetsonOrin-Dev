@@ -6,6 +6,9 @@ import struct
 import serial
 import serial.tools.list_ports
 from serial import SerialException
+
+from utils.log_utils import log_print
+
 '''
     Serial port parameter configuration
 '''
@@ -52,7 +55,9 @@ class DeviceModel:
     protocolResolver = None
 
     def __init__(self, deviceName, protocolResolver, dataProcessor, dataUpdateListener):
-        print("Initializing Device Model")
+        # print("Initializing Device Model")
+        log_print("Initializing Device Model", log_file_path="logs/common.log")
+
         self.deviceName = deviceName
         self.protocolResolver = protocolResolver
         self.dataProcessor = dataProcessor
@@ -133,10 +138,13 @@ class DeviceModel:
 
         self.closeDevice()
 
-        print(f"Try to connect IMU on {self.serialConfig.portName} ----------------")
+        # print(f"Try to connect IMU on {self.serialConfig.portName} ----------------")
+        log_print(f"Try to connect IMU on {self.serialConfig.portName} ----------------", log_file_path="logs/common.log")
+        
         available_ports = [p.device for p in serial.tools.list_ports.comports()]
         if self.serialConfig.portName not in available_ports:
-            print(f"[Error] Serial port '{self.serialConfig.portName}' not found.")
+            # print(f"[Error] Serial port '{self.serialConfig.portName}' not found.")
+            log_print(f"[Error] Serial port '{self.serialConfig.portName}' not found.", log_file_path="logs/common.log")
             return
         try:
             self.serialPort = serial.Serial(
@@ -162,7 +170,8 @@ class DeviceModel:
             self.serialPort.close()
             print("Port Closed")
         self.isOpen = False
-        print("Device Close")
+        # print("Device Close")
+        log_print("Device Closed", log_file_path="logs/common.log")
 
     def onDataReceived(self, data):
         """
