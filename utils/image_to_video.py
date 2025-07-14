@@ -2,7 +2,7 @@ import os
 import cv2
 
 def images_to_video(image_folder, output_video_path, fps=2):
-    # 获取所有图片文件名并按顺序排序
+    # Get all image filenames in the folder and sort them in order
     image_files = sorted([
         f for f in os.listdir(image_folder)
         if f.lower().endswith(('.png', '.jpg', '.jpeg'))
@@ -12,15 +12,16 @@ def images_to_video(image_folder, output_video_path, fps=2):
         print("No image files found.")
         return
 
-    # 读取第一张图像，获取尺寸
+    # Read the first image to get frame dimensions
     first_image_path = os.path.join(image_folder, image_files[0])
     frame = cv2.imread(first_image_path)
     height, width, _ = frame.shape
 
-    # 初始化视频写入器（MP4 格式，H.264 编码）
-    fourcc = cv2.VideoWriter_fourcc(*'mp4v')  # 或 'avc1' / 'XVID'
+    # Initialize the video writer (MP4 format, H.264 or similar codec)
+    fourcc = cv2.VideoWriter_fourcc(*'mp4v')  # Alternatives: 'avc1', 'XVID'
     video_writer = cv2.VideoWriter(output_video_path, fourcc, fps, (width, height))
 
+    # Loop through all image files and write them to the video
     for img_name in image_files:
         img_path = os.path.join(image_folder, img_name)
         img = cv2.imread(img_path)
@@ -28,18 +29,20 @@ def images_to_video(image_folder, output_video_path, fps=2):
             print(f"Warning: Failed to read {img_path}")
             continue
 
-        # 如果图像尺寸不一致，可在此自动调整
+        # Resize the image if it does not match the video frame size
         if img.shape[1] != width or img.shape[0] != height:
             img = cv2.resize(img, (width, height))
 
+        # Write the image frame to the video
         video_writer.write(img)
 
+    # Release the video writer to finalize the file
     video_writer.release()
     print(f"Video saved to: {output_video_path}")
 
-# 示例调用
+# Example usage
 images_to_video(
-    image_folder='image',                   # 图像文件夹
-    output_video_path='output_video.mp4',   # 输出视频路径
-    fps=2                                  # 帧率，可改为15或60等
+    image_folder='image',                   # Folder containing image files
+    output_video_path='output_video.mp4',   # Output video file path
+    fps=2                                   # Frames per second (adjustable)
 )
