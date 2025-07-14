@@ -24,6 +24,9 @@ from radar.radarprocessing.get_td_sensor_data import get_td_data_voltage
 from radar.radarprocessing.radar_processing_functions import movmean2d, compensatePathloss_dB, Clutter_rejection
 
 from multiprocessing.managers import ListProxy
+
+from utils.log_utils import log_print
+
 class RadarTracking():
     def __init__(self, 
                  radar_configuration: RadarConfiguration,
@@ -269,9 +272,13 @@ class RadarTracking():
                         SNR_vector[k] = zval - noise_floor
 
 
+                        #if range_measurements[k] > 0 and abs(range_measurements[k] - 57.6) > 2 and SNR_vector[k] > 6.0:
                         if range_measurements[k] > 0 and abs(range_measurements[k] - 57.6) > 2 and SNR_vector[k] > 3.5:
                             last_active_frame = i
                             self.radar_data_queue.put(DetectionsAtTime(timestamps[k+start_index],RADAR_DETECTION_TYPE, [range_measurements[k], SNR_vector[k]] ) )
+                            ##log_print(f"SNR_vector value at k={k}: {SNR_vector[k]}")
+                            print(f"SNR_vector value at k={k}: {SNR_vector[k]}")
+                        
                         else:
                             #Reset the kalman filter if the range measurement is not valid for long enough (about 5 seconds)
                             if i-last_active_frame >50:
@@ -282,7 +289,6 @@ class RadarTracking():
                                 P = np.eye(2) * 500
                                 x = np.array([[range_axis[0]],[0]])  # column vector 
                                 
-                                 
             i = i+1
 
             if self.config.record_data:
@@ -463,8 +469,8 @@ class RadarTracking():
                                 P = np.eye(2) * 500
                                 x = np.array([[range_axis[0]],[0]])  # column vector
                                 
-
-                        #print(f"SNR_vector value at k={k}: {SNR_vector[k]}")
+                        log_print(f"SNR_vector value at k={k}: {SNR_vector[k]}")
+                        print(f"SNR_vector value at k={k}: {SNR_vector[k]}")
                                 
      
             i = i+1

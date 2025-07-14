@@ -360,8 +360,9 @@ def process_queues(stop_event,
                     img_time = image_detections_in_window[-1].timestamp
                     img_data = image_detections_in_window[-1]
 
-                print("Nearest date from camera list :" + str(img_time))
-                
+                #print("Nearest date from camera list :" + str(img_time))
+                log_print("Nearest date from camera list:", img_time, log_file_path="logs/common.log") 
+
                 timestamps = []
                 for i in range(len(radar_detections_in_window)):
                     timestamps.append(radar_detections_in_window[i].timestamp)
@@ -372,11 +373,14 @@ def process_queues(stop_event,
                     for date in timestamps}
                 
                 res = cloz_dict[min(cloz_dict.keys())]
-                print("Nearest date from radar list : " + str(res))
+                #print("Nearest date from radar list : " + str(res))
+                log_print("Nearest date from radar list:", res, log_file_path="logs/common.log")
+
                 combination_index = timestamps.index(res)
                 
                 time_diff = img_time - radar_detections_in_window[combination_index].timestamp 
-                print("Time difference:" + str(time_diff.total_seconds()))
+                #print("Time difference:" + str(time_diff.total_seconds()))
+                log_print("Time difference:", time_diff.total_seconds(), log_file_path="logs/common.log")
 
                 collision_close = any(radar_detections_in_window[i].detections[0]<40 for i in range(len(radar_detections_in_window))) 
                 if collision_close and not avoidance_flag_sent[1]:
@@ -479,7 +483,10 @@ def process_queues(stop_event,
 
             elif radar_detections_in_window:
                 # print("Radar data detected__________________________")
-                log_print("Radar data detected________radar("+str(radar_detections_in_window[-1].detections[0])+'m)', log_file_path="logs/common.log")
+                log_print("Radar data detected________radar("+
+                    str(radar_detections_in_window[-1].detections[0])+
+                    str(radar_detections_in_window[-1].detections[1])+'m)'
+                    , log_file_path="logs/common.log")
 
                 radar_timestamp = radar_detections_in_window[-1].timestamp
                 radar_detections = radar_detections_in_window[-1].detections
@@ -487,18 +494,18 @@ def process_queues(stop_event,
 
                   
                  
+                if False:
+                    collision_close = any(radar_detections_in_window[i].detections[0]<40 for i in range(len(radar_detections_in_window))) 
+                    if collision_close and not avoidance_flag_sent[1]:
+                        log_print("Radar below 40m, sending avoidance flag", log_file_path="logs/common.log")
 
-                collision_close = any(radar_detections_in_window[i].detections[0]<40 for i in range(len(radar_detections_in_window))) 
-                if collision_close and not avoidance_flag_sent[1]:
-                    log_print("Radar below 40m, sending avoidance flag", log_file_path="logs/common.log")
-
-                    #If too many false detections, comment the lines below
-                    log_print("[!!!] Triggering Level 1 Avoidance", log_file_path="logs/common.log")
-                    sent_avoidance_flag(level=1) # Call the function to send the avoidance flag
-                    avoidance_flag_sent[1] = True # Mark Level 1 as sent
+                        #If too many false detections, comment the lines below
+                        log_print("[!!!] Triggering Level 1 Avoidance", log_file_path="logs/common.log")
+                        sent_avoidance_flag(level=1) # Call the function to send the avoidance flag
+                        avoidance_flag_sent[1] = True # Mark Level 1 as sent
                     
-                    #log_print("Collision close detected, sending avoidance flag", log_file_path="logs/common.log")   
-                    #avoidance_flag = check_and_send_avoidance_flag(datetime.now())
+                        #log_print("Collision close detected, sending avoidance flag", log_file_path="logs/common.log")   
+                        #avoidance_flag = check_and_send_avoidance_flag(datetime.now())
 
                  
 
@@ -586,8 +593,10 @@ if __name__ == '__main__':
                               args=(stop_event, shared_buffers)
                               )
     rawdata_buffer_proc.start()
+    
     # Generate a IMU Processing
-    if not args.skip_imu:
+    # if not args.skip_imu:
+    if args.skip_imu:
         # print("Process imu and save data...")
         log_print("Process imu and save data...", log_file_path="logs/common.log")
         imu_data_queue = mp.Queue()
